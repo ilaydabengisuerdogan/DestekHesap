@@ -61,10 +61,14 @@ doktor randevusu izni kullanmış, yıllık izni olmayan bir personel:
 
 ### Son kullanıcı (Python gerekmez)
 
-`TeknoparkDestekHesaplama.exe` dosyasına çift tıklayın. Kurulum ve internet gerektirmez.
-Kullanım adımları `KULLANIM.txt` içinde.
+`TeknoparkDestekHesaplama_Kurulum.exe` çalıştırılır. Yönetici şifresi gerektirmez;
+program kullanıcının kendi klasörüne kurulur, Başlat menüsüne kısayol ekler ve
+kaldırma kaydı oluşturur. Kullanım adımları `KULLANIM.txt` içinde.
 
-> `.exe` depoya dahil değildir (32 MB). Aşağıdaki komutla üretilir.
+Kurulumsuz kullanmak isteyenler `TeknoparkDestekHesaplama.exe` dosyasını doğrudan
+çalıştırabilir. Her iki durumda da internet gerekmez.
+
+> Üretilen dosyalar depoya dahil değildir (32–34 MB). Aşağıdaki komutlarla üretilir.
 
 ### Geliştirme
 
@@ -74,8 +78,27 @@ python -m pip install -r requirements.txt
 python masaustu.py                    # masaüstü arayüzü
 python -m streamlit run app.py        # tarayıcı arayüzü
 python hesaplama.py girdi.xlsx cikti.xlsx   # komut satırı
+
 python paketle.py                     # tek dosya .exe üret
+python kurulum_yap.py                 # kurulum dosyası (setup) üret
 ```
+
+`kurulum_yap.py`, gerekiyorsa önce `paketle.py`'yi çağırır. Kurulum dosyası üretmek
+için [Inno Setup 6](https://jrsoftware.org/isdl.php) kurulu olmalıdır.
+
+### Dağıtım
+
+**E-posta ve WhatsApp ile göndermeyin.** Bu servisler `.exe` dosyalarını güvenlik
+gerekçesiyle engeller veya uzantısını değiştirir; dosya karşı tarafa bozuk ulaşır ve
+Windows "hangi uygulamayla açmak istersiniz?" diye sorar. Zip içine koymak da işe
+yaramaz — Gmail zip içindeki `.exe` dosyalarını da engeller.
+
+Çalışan yöntemler:
+
+- **OneDrive / SharePoint / Teams bağlantısı** — dosyayı yükleyip bağlantısını paylaşın
+- **Şirket ağ sürücüsü**
+- **USB bellek**
+- **GitHub Releases** — depo sayfasından *Releases → Create a new release* ile yüklenir
 
 ---
 
@@ -88,7 +111,8 @@ python paketle.py                     # tek dosya .exe üret
 | `app.py` | Tarayıcı arayüzü (Streamlit). Aynı motoru kullanır. |
 | `test_hesaplama.py` | 51 test senaryosu. |
 | `paketle.py` | PyInstaller ile tek dosya `.exe` üretir. |
-| `KULLANIM.txt` | İK için kullanım kılavuzu; `.exe` ile birlikte dağıtılır. |
+| `kurulum.iss` / `kurulum_yap.py` | Inno Setup ile kurulum dosyası (setup) üretir. |
+| `KULLANIM.txt` | İK için kullanım kılavuzu; kurulumla birlikte dağıtılır. |
 
 Kural motoru arayüzden ayrı tutuldu: kural değişince tek dosya güncelleniyor,
 hesaplama arayüz açmadan test edilebiliyor ve aynı motor üç kullanım biçimini besliyor.
@@ -151,6 +175,8 @@ python -m pytest test_hesaplama.py -q
 | Girdi dayanıklılığı | 10 | Eksik kolon, eşanlamlılar, başlık bloğu, ek kolonlar |
 | Çıktı dosyaları | 2 | İkili Excel üretimi |
 | Tatil takvimi uyarısı | 2 | Takvim sapması tespiti |
+
+**Senaryoların tamamı beklenen sonuçlarıyla birlikte → [TEST_SENARYOLARI.md](TEST_SENARYOLARI.md)**
 
 > Gerçek veri regresyon testleri, izin raporu dosyası çalışma dizininde yoksa
 > otomatik olarak atlanır. Veri dosyaları depoda bulunmaz (aşağıya bakınız).

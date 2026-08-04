@@ -12,12 +12,19 @@ GEREKMEZ. Internet baglantisi da GEREKMEZ.
 
 
 ----------------------------------------------------------------
-  1. PROGRAMI ACMA
+  1. KURULUM
 ----------------------------------------------------------------
 
-TeknoparkDestekHesaplama.exe dosyasina cift tiklayin.
+TeknoparkDestekHesaplama_Kurulum.exe dosyasina cift tiklayin ve
+adimlari izleyin. Kurulum birkac saniye surer.
 
-Program ilk acilista birkac saniye bekleyebilir, bu normaldir.
+Yonetici sifresi GEREKMEZ - program kendi kullanici klasorunuze
+kurulur.
+
+Kurulum bitince program su iki yerden acilir:
+
+   - Baslat menusu > Teknopark Destek Hesaplama
+   - Masaustundeki kisayol (kurulumda isaretlediyseniz)
 
 
   >> "Windows bilgisayarinizi korudu" uyarisi cikarsa:
@@ -30,7 +37,20 @@ Program ilk acilista birkac saniye bekleyebilir, bu normaldir.
      1. "Ek bilgi" yazisina tiklayin
      2. Cikan "Yine de calistir" dugmesine basin
 
-  Bu islemi yalnizca ilk acilista yapmaniz yeterlidir.
+  Bu islemi yalnizca kurulum sirasinda bir kez yapmaniz yeterlidir.
+
+
+  >> Programi kaldirmak icin:
+
+  Baslat menusu > Teknopark Destek Hesaplama > Kaldir
+  (veya Ayarlar > Uygulamalar listesinden)
+
+
+  >> Kurulumsuz surum
+
+  Elinize kurulum dosyasi yerine dogrudan
+  TeknoparkDestekHesaplama.exe geldiyse, ona cift tiklamaniz
+  yeterlidir; kurulum gerekmez. Ilk acilis birkac saniye surebilir.
 
 
 ----------------------------------------------------------------
