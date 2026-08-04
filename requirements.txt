@@ -1,3 +1,4 @@
-streamlit
+streamlit>=1.60
 pandas
 openpyxl
+pytest

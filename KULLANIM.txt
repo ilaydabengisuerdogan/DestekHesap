@@ -1,0 +1,277 @@
+================================================================
+  TEKNOPARK DESTEK HESAPLAMA
+  Kullanim Kilavuzu
+================================================================
+
+Bu program, Ik'dan gelen izin raporu Excel dosyasini okuyup her
+personel icin teknopark destegine esas gun ve saat miktarini
+hesaplar ve sonucu yeni bir Excel dosyasina yazar.
+
+Bilgisayarinizda Python veya baska bir program KURULU OLMASI
+GEREKMEZ. Internet baglantisi da GEREKMEZ.
+
+
+----------------------------------------------------------------
+  1. PROGRAMI ACMA
+----------------------------------------------------------------
+
+TeknoparkDestekHesaplama.exe dosyasina cift tiklayin.
+
+Program ilk acilista birkac saniye bekleyebilir, bu normaldir.
+
+
+  >> "Windows bilgisayarinizi korudu" uyarisi cikarsa:
+
+  Bu uyari, programin zararli oldugu anlamina GELMEZ. Windows,
+  tanimadigi (dijital imzasi olmayan) her programda bu uyariyi
+  gosterir.
+
+  Gecmek icin:
+     1. "Ek bilgi" yazisina tiklayin
+     2. Cikan "Yine de calistir" dugmesine basin
+
+  Bu islemi yalnizca ilk acilista yapmaniz yeterlidir.
+
+
+----------------------------------------------------------------
+  2. KULLANIM - 4 ADIM
+----------------------------------------------------------------
+
+  ADIM 1 - Dosyayi secin
+  ......................................................
+  "Dosya Sec..." dugmesine basip Ik'dan gelen izin raporu
+  Excel dosyasini secin.
+
+  Dosyada su bilgiler bulunmalidir:
+     Calisan Numarasi, Sirket, Izin Turu, Izin Nedeni,
+     Izin Baslangic Tarihi, Izin Bitis Tarihi,
+     quantityInDays, quantityInHours
+
+  Kolonlardan biri eksikse program hangisinin eksik
+  oldugunu ve dosyada hangi kolonlarin bulundugunu soyler.
+
+
+  >> KOLON YAPISI DEGISIRSE
+
+  Program kolon adlarindaki farkliliklara toleranslidir:
+
+    - Buyuk/kucuk harf ve bosluk farki onemli degildir
+      ("IZIN TURU", "izin türü", " Izin Turu " ayni sayilir).
+
+    - Yaygin farkli adlandirmalar taninir:
+        Calisan Numarasi  <- Sicil No, Personel No, TC
+        Izin Baslangic    <- Baslangic Tarihi, Baslangic
+        Izin Bitis        <- Bitis Tarihi, Bitis
+        Izin Turu         <- Izin Tipi
+        quantityInDays    <- Gun, Gun Sayisi
+        quantityInHours   <- Saat, Saat Sayisi
+
+    - Baslik satiri ilk satirda olmak zorunda degildir.
+      Ustte firma adi, donem bilgisi gibi bloklar varsa
+      program gercek baslik satirini kendisi bulur.
+
+    - YENI KOLONLAR OTOMATIK TASINIR. Dosyaya Ad Soyad,
+      Sicil No, Departman gibi kolonlar eklenirse bunlar
+      hem ekrandaki tabloda hem de kaydedilen Excel'de
+      calisan numarasinin hemen yaninda yer alir.
+      Ayrica bir ayar yapmaniz gerekmez.
+
+      Bir kolon ayni personelin satirlarinda farkli
+      degerler iceriyorsa hepsi " / " ile birlestirilerek
+      gosterilir (ornegin "Ar-Ge / Uretim"), boylece
+      durum gozden kacmaz.
+
+
+  ADIM 2 - Donem ve tatilleri kontrol edin
+  ......................................................
+  Yil, ay ve o aya ait resmi tatiller dosyadan OTOMATIK
+  doldurulur. Genelde degistirmenize gerek kalmaz.
+
+  Resmi tatil listesi hataliysa duzeltebilirsiniz:
+     - Bicim: 15.07.2026
+     - Birden fazlaysa virgulle ayirin:
+       28.10.2026, 29.10.2026
+     - Tatil yoksa kutuyu bos birakin
+
+  ONEMLI: Resmi tatiller hesabi dogrudan etkiler. Program,
+  dosyadaki izin gun sayilari ile tatil listesini karsilastirir;
+  bir uyusmazlik bulursa sari renkli bir uyari gosterir. Boyle
+  bir uyari gorurseniz tatil listesini gozden gecirin.
+
+
+  ADIM 3 - Hesaplayin
+  ......................................................
+  "HESAPLA" dugmesine basin.
+
+  Ust kisimda ozet gorunur:
+     Toplam Personel / Raporlu Personel /
+     Toplam Destek Gunu / Toplam Kesinti
+
+  Alttaki tabloda kesintisi olan personel listelenir.
+  Raporlu personel satirlari acik kirmizi ile isaretlidir.
+
+  Kesintisi olmayan personeli de gormek isterseniz
+  "Yalnizca kesintisi olan personeli goster" kutusundaki
+  isareti kaldirin.
+
+
+  ADIM 4 - Sonucu kaydedin
+  ......................................................
+  "Excel Olarak Kaydet" dugmesine basin ve kaydedilecek
+  yeri secin.
+
+  IKI DOSYA olusur:
+
+    1. teknopark_destek_2026_07.xlsx
+       TUM personel (yalnizca ekranda gorunenler degil).
+
+    2. teknopark_destek_2026_07_kesintili.xlsx
+       Yalnizca kesintisi olan personel. Ikinci dosya,
+       birincinin yanina otomatik olarak yazilir; ayrica
+       bir sey yapmaniz gerekmez.
+
+  Kesintisi olan personel yoksa ikinci dosya olusturulmaz.
+
+
+----------------------------------------------------------------
+  3. HESAPLAMA KURALLARI
+----------------------------------------------------------------
+
+Tesvik 30 GUN uzerinden hesaplanir.
+
+Belirleyici kriter, personelin o ay icinde SAGLIK RAPORU
+(hastalik raporu veya kadin dogum istirahati) olup olmadigidir.
+
+
+  RAPORU OLMAYAN PERSONEL
+  ......................................................
+  Yillik izin, resmi tatil ve mazeret izni tesvikten
+  DUSMEZ. Tam 30 gun destek alir.
+
+
+  RAPORU OLAN PERSONEL
+  ......................................................
+  Haftalik calisma saatini tamamlayamadigi icin sunlar dusulur:
+
+    1. Rapor gunleri
+       Rapor araligina dusen is gunleri.
+
+    2. Hafta sonu
+       Raporun degdigi HER haftanin Cumartesi ve Pazar gunleri.
+
+    3. Yillik izin
+       O ay icinde kullanilan yillik izin gunleri.
+
+    4. Resmi tatiller
+       O ay icindeki hafta icine denk gelen resmi tatiller.
+
+    5. Kismi (saatlik) rapor
+       Saatler ay boyunca toplanir. Artan kisim yarim gunu
+       (4 saat) asmiyorsa yarim gun, asiyorsa tam gun dusulur.
+
+  DUSMEYEN IZINLER
+  Mazeret Izni (doktor randevusu, dogum gunu izni, tasinma vb.)
+  ve Evlilik Izni tesvikten DUSMEZ - personel raporlu olsa bile.
+  Yalnizca yillik izin ve resmi tatil duser.
+
+  AY SONU HAFTASI
+  Hafta sonu yalnizca donem ayinin ICINE duserse sayilir. Ay sonu
+  haftasinin hafta sonu bir sonraki aya tasiyorsa bu donemden
+  dusmez. Ornek: 27-31 Temmuz haftasinin hafta sonu 1-2 Agustos
+  oldugu icin Temmuz hesabina girmez.
+
+  Destek Saat = Destek Gun x 8
+
+
+  ORNEK 1
+  ......................................................
+  Personel ayin 2. haftasinda 2 saat eksik calisti,
+  baska bir haftada 2 gun yillik izin kullandi ve
+  yine baska bir haftada 1 gun resmi tatil var.
+
+     2 saat eksik calisma ....... 0,5 gun
+     o haftanin hafta sonu ...... 2,0 gun
+     yillik izin ................ 2,0 gun
+     resmi tatil ................ 1,0 gun
+     ------------------------------------
+     TOPLAM KESINTI ............. 5,5 gun
+
+     Destek = 30 - 5,5 = 24,5 gun
+
+
+  ORNEK 2 - Kadin dogum istirahati
+  ......................................................
+  Personel 16 Temmuz'da dogum istirahatine ayrildi.
+  Ayni ay icinde 1 gun dogum gunu izni ve 4 saatlik
+  doktor randevusu izni de kullanmisti.
+
+     rapor gunleri (16-31 Tem) .. 12,0 gun
+     hafta sonu ................. 4,0 gun
+       (18-19 ve 25-26 Temmuz.
+        27-31 haftasinin hafta sonu
+        1-2 Agustos oldugu icin sayilmaz)
+     yillik izin ................ 0,0 gun
+       (yillik izni yok)
+     resmi tatil (15 Tem) ....... 1,0 gun
+     mazeret izinleri ........... 0,0 gun
+       (dogum gunu izni ve doktor
+        randevusu tesvikten dusmez)
+     ------------------------------------
+     TOPLAM KESINTI ............. 17,0 gun
+
+     Destek = 30 - 17 = 13 gun
+
+
+----------------------------------------------------------------
+  4. CIKTI DOSYASINDAKI KOLONLAR
+----------------------------------------------------------------
+
+  Calisan Numarasi              Personel numarasi
+  Sirket                        Bagli oldugu sirket
+  Donem                         Hesaplanan ay (orn. 2026-07)
+  Rapor Durumu                  Raporlu / Raporsuz
+  Rapor Turu                    Hastalik Raporu vb.
+  Rapor Gun                     Rapor nedeniyle dusen is gunu
+  Hafta Sonu Kesintisi          Kaybedilen hafta sonu gunu
+  Yillik Izin Kesintisi         Yillik izin nedeniyle dusen gun
+  Resmi Tatil Kesintisi         Tatil nedeniyle dusen gun
+  Kismi Rapor Kesintisi         Saatlik raporlardan dusen gun
+  Toplam Kesinti                Yukaridakilerin toplami
+  Destek Gun                    30 - Toplam Kesinti
+  Destek Saat                   Destek Gun x 8
+  Uyari                         Varsa tatil takvimi uyusmazligi
+
+Kesinti kalemleri ayri ayri gosterildigi icin, teknopark
+denetiminde hangi kesintinin nereden geldigi izlenebilir.
+
+
+----------------------------------------------------------------
+  5. SIK KARSILASILAN DURUMLAR
+----------------------------------------------------------------
+
+  "Dosya okunamadi" hatasi
+     Yanlis dosya secilmis olabilir. Izin raporu Excel
+     dosyasini sectiginizden emin olun. Hata mesaji hangi
+     kolonun eksik oldugunu belirtir.
+
+  "Dosya kaydedilemedi" hatasi
+     Ayni isimli dosya Excel'de acik olabilir. Excel'de
+     kapatip tekrar deneyin.
+
+  Sari uyari cikiyor
+     Dosyadaki izin gun sayilari, girilen resmi tatil
+     listesiyle uyusmuyor. Tatil listesini kontrol edin.
+     Ayrintili aciklama, kaydedilen Excel dosyasinin
+     "Uyari" kolonunda yer alir.
+
+  Program acilmiyor
+     Antivirus programi engelliyor olabilir. Bilgi islem
+     ile iletisime gecin.
+
+  Tabloda az personel gorunuyor
+     Varsayilan olarak yalnizca kesintisi olan personel
+     listelenir. Tumunu gormek icin tablonun ustundeki
+     onay kutusundaki isareti kaldirin. Kaydedilen Excel
+     dosyasinda her durumda tum personel yer alir.
+
+================================================================

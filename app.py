@@ -1,81 +1,15 @@
-import streamlit as st
-import pandas as pd
+import datetime as dt
 import io
+
+import streamlit as st
+
+import hesaplama
 
 # Sayfa Ayarları
 st.set_page_config(page_title="Teknopark Destek Hesaplama", page_icon="🏢", layout="wide")
 
-def process_data(df):
-    """
-    Excel'den gelen puantaj verisini işleyerek destek gün ve saatini hesaplar.
-    """
-    # 1. Kolon Doğrulama
-    beklenen_kolonlar = ['Sicil No / TC', 'Ad Soyad', 'Tarih', 'Çalışılan Saat', 'Devamsızlık Tipi']
-    eksik_kolonlar = [col for col in beklenen_kolonlar if col not in df.columns]
-    
-    if eksik_kolonlar:
-        return False, f"Hata: Yüklenen dosyada şu kolonlar eksik: {', '.join(eksik_kolonlar)}"
-    
-    # 2. Veri Temizleme ve Hazırlık
-    # Tarih kolonunu datetime'a çevir
-    try:
-        df['Tarih'] = pd.to_datetime(df['Tarih'])
-    except Exception as e:
-        return False, f"Hata: 'Tarih' kolonu geçerli bir tarih formatında değil. Detay: {e}"
-        
-    # Boş verileri temizle (Örn: Sicil No boş olan satırları yoksay)
-    df = df.dropna(subset=['Sicil No / TC', 'Tarih'])
-    
-    # Aynı gün için mükerrer kayıtları temizle (TC-11)
-    df = df.drop_duplicates(subset=['Sicil No / TC', 'Tarih'], keep='first')
-    
-    # Hafta içi mi kontrolü (0=Pzt, 6=Paz)
-    df['Gun_Indeks'] = df['Tarih'].dt.dayofweek
-    df['Hafta_Ici'] = df['Gun_Indeks'] < 5
-    
-    # Hafta ve Yıl bilgisi (ISO Takvimi) - TC-09 için Pazartesi başlangıçlı gruplama
-    df['Yıl'] = df['Tarih'].dt.isocalendar().year
-    df['Hafta'] = df['Tarih'].dt.isocalendar().week
-    
-    # Sadece hafta içi günlerini filtrele (Kesintiler hafta içi günlerinden düşülür)
-    df_hafta_ici = df[df['Hafta_Ici'] == True].copy()
-    
-    # Kesinti Sayılacak Devamsızlık Tipleri
-    kesinti_tipleri = ['Yıllık İzin', 'Rapor', 'Resmi Tatil', 'Ücretsiz İzin']
-    df_hafta_ici['Kesinti_Mi'] = df_hafta_ici['Devamsızlık Tipi'].isin(kesinti_tipleri)
-    
-    # 3. Hesaplama (Çalışan ve Hafta bazında gruplama)
-    sonuclar = []
-    
-    gruplar = df_hafta_ici.groupby(['Sicil No / TC', 'Ad Soyad', 'Yıl', 'Hafta'])
-    
-    for (sicil, ad, yil, hafta), grup in gruplar:
-        # Toplam kesinti gün sayısı (Aynı güne ait mükerrerleri zaten sildik)
-        kesinti_gun_sayisi = grup['Kesinti_Mi'].sum()
-        
-        # Destek Formülü: 5 iş günü - Kesinti Gün Sayısı
-        # (Kesinti 5'ten büyük olamaz, güvenlik amaçlı max(0, ...) kullanıyoruz)
-        destek_gun = max(0, 5 - kesinti_gun_sayisi)
-        destek_saat = destek_gun * 8
-        
-        # O haftanın başlangıç tarihi (Pazartesi) gösterim amaçlı
-        hafta_baslangic = grup['Tarih'].min() - pd.Timedelta(days=grup['Tarih'].min().dayofweek)
-        hafta_bitis = hafta_baslangic + pd.Timedelta(days=6)
-        hafta_etiket = f"{hafta_baslangic.strftime('%d.%m.%Y')} - {hafta_bitis.strftime('%d.%m.%Y')}"
-        
-        sonuclar.append({
-            'Sicil No / TC': sicil,
-            'Ad Soyad': ad,
-            'Yıl': yil,
-            'Hafta': hafta,
-            'Hafta Aralığı': hafta_etiket,
-            'Kesinti Gün Sayısı': kesinti_gun_sayisi,
-            'Destek Gün': destek_gun,
-            'Destek Saat': destek_saat
-        })
-        
-    sonuc_df = pd.DataFrame(sonuclar)
-    return True, sonuc_df
+AYLAR = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+         'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık']
 
 # --- ÖZEL CSS (ŞIK TASARIM) ---
 st.markdown("""
@@ -85,7 +19,7 @@ st.markdown("""
         background-color: #f8f9fa;
         font-family: 'Inter', sans-serif;
     }
-    
+
     /* Başlık Stili */
     .main-title {
         color: #1e3c72;
@@ -94,7 +28,7 @@ st.markdown("""
         margin-bottom: 0px;
         padding-bottom: 10px;
     }
-    
+
     .sub-title {
         color: #6c757d;
         font-size: 1.1rem;
@@ -122,7 +56,7 @@ st.markdown("""
     div.stButton > button:first-child:active {
         background-color: #1e40af;
     }
-    
+
     /* İndirme Butonu Stili */
     div.stDownloadButton > button:first-child {
         background-color: #10b981;
@@ -154,78 +88,183 @@ st.markdown("""
 
 # --- UI Tasarımı ---
 st.markdown('<h1 class="main-title">🏢 Teknopark Destek Hesaplama</h1>', unsafe_allow_html=True)
-st.markdown('<p class="sub-title">Puantaj Excel dosyalarınızı saniyeler içinde işleyin ve desteğe esas gün/saat miktarlarını hatasız hesaplayın.</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">İzin raporu Excel dosyanızı saniyeler içinde işleyin ve desteğe esas gün/saat miktarlarını hatasız hesaplayın.</p>', unsafe_allow_html=True)
 
 with st.expander("ℹ️ Hesaplama Kuralları ve Detaylar", expanded=False):
-    st.markdown("""
-    - Haftalık norm **5 iş günü** ve **40 saattir**.
-    - Destek hesaplaması yalnızca hafta içi günleri (Pzt-Cuma) baz alır.
-    - **Rapor, Resmi Tatil, Yıllık İzin, Ücretsiz İzin** gibi devamsızlıklar destek gününden düşülür (1 tam gün = 8 saat).
-    - Hafta sonuna denk gelen devamsızlıklar destek süresini etkilemez (zaten dahil edilmemiştir).
+    st.markdown(f"""
+    Teşvik **{hesaplama.TESVIK_TABAN_GUN} gün** üzerinden hesaplanır. Belirleyici kriter,
+    personelin o ay içinde **sağlık raporu** (hastalık raporu veya kadın doğum istirahati) olup olmadığıdır.
+
+    **Raporu olmayan personel** — yıllık izin, resmi tatil ve mazeret izni teşvikten **düşmez**;
+    tam {hesaplama.TESVIK_TABAN_GUN} gün destek alır.
+
+    **Raporu olan personel** — haftalık çalışma saatini tamamlayamadığı için şu kalemler düşülür:
+    1. **Rapor günleri** — rapor aralığına düşen iş günleri.
+    2. **Hafta sonu** — raporun değdiği *her* haftanın Cumartesi ve Pazar günleri.
+    3. **Yıllık izin** — o ay içinde kullanılan yıllık izin günleri.
+    4. **Resmi tatiller** — o ay içindeki hafta içine denk gelen resmi tatiller.
+    5. **Kısmi rapor** — saatlik raporlar birikimli toplanır; artan kısım yarım günü aşmıyorsa
+       yarım gün, aşıyorsa tam gün olarak düşülür.
+
+    **Mazeret İzni** (doktor randevusu, doğum günü izni vb.) ve **Evlilik İzni** teşvikten
+    düşmez — raporlu personelde dahi.
+
+    Hafta sonu yalnızca **dönem ayının içine düşerse** sayılır. Ay sonu haftasının hafta sonu
+    bir sonraki aya taşıyorsa (örn. 27-31 Temmuz haftasının 1-2 Ağustos'u) bu dönemden düşmez.
+
+    `Destek Saat = Destek Gün × {hesaplama.GUNLUK_SAAT}` olarak hesaplanır.
     """)
 
 # Dosya Yükleme Alanı
 col1, col2 = st.columns([3, 1])
 
 with col1:
-    uploaded_file = st.file_uploader("Puantaj Excel Dosyasını Sürükleyin veya Seçin", type=['xlsx', 'xls'])
+    uploaded_file = st.file_uploader("İzin Raporu Excel Dosyasını Sürükleyin veya Seçin", type=['xlsx', 'xls'])
+
+# Dosya okundukça dönem/tatil ayarlarını hazırla; hesaplama butonuna basılmadan
+# kullanıcı bunları gözden geçirebilsin.
+veri = None
+hata_mesaji = None
+if uploaded_file is not None:
+    try:
+        veri = hesaplama.oku(uploaded_file)
+    except hesaplama.GirdiHatasi as hata:
+        hata_mesaji = str(hata)
 
 with col2:
-    st.markdown("<br><br>", unsafe_allow_html=True) # Hizalama için
-    hesapla_btn = st.button("🚀 Verileri Hesapla", use_container_width=True)
+    st.markdown("<br><br>", unsafe_allow_html=True)  # Hizalama için
+    hesapla_btn = st.button("🚀 Verileri Hesapla", width='stretch', disabled=veri is None)
 
-if uploaded_file is not None and hesapla_btn:
-    with st.spinner("✨ Veriler işleniyor, lütfen bekleyin..."):
+if hata_mesaji:
+    st.error(hata_mesaji)
+
+if veri is not None:
+    tespit_yil, tespit_ay = hesaplama.donem_tespit(veri)
+
+    st.markdown("#### ⚙️ Dönem ve Resmi Tatil Ayarları")
+    a1, a2, a3 = st.columns([1, 1, 3])
+    with a1:
+        yil = st.number_input("Yıl", min_value=2020, max_value=2100, value=tespit_yil, step=1)
+    with a2:
+        ay = st.selectbox("Ay", options=list(range(1, 13)),
+                          index=tespit_ay - 1, format_func=lambda a: AYLAR[a - 1])
+
+    donem = (int(yil), int(ay))
+    varsayilan_tatiller = hesaplama.donem_tatilleri(donem)
+    with a3:
+        tatil_metni = st.text_input(
+            f"{AYLAR[ay - 1]} {yil} resmi tatilleri (gg.aa.yyyy, virgülle ayrılmış)",
+            value=", ".join(f"{g:%d.%m.%Y}" for g in varsayilan_tatiller),
+            help="Takvimde eksik/fazla tatil varsa buradan düzeltin. Sapmalar çıktıdaki 'Uyarı' kolonunda da bildirilir.",
+        )
+
+    # Dönem dışı tatiller korunur; tutarlılık uyarısı ay dışına taşan izinleri de kontrol ediyor.
+    tatiller = {g for g in hesaplama.RESMI_TATILLER if g not in varsayilan_tatiller}
+    gecersiz = []
+    for parca in tatil_metni.split(','):
+        parca = parca.strip()
+        if not parca:
+            continue
         try:
-            # Veriyi oku
-            df = pd.read_excel(uploaded_file)
-            
-            # İşle
-            basarili, sonuc = process_data(df)
-            
-            if not basarili:
-                st.error(sonuc) # Hata mesajını göster
+            tatiller.add(dt.datetime.strptime(parca, '%d.%m.%Y').date())
+        except ValueError:
+            gecersiz.append(parca)
+    if gecersiz:
+        st.warning("Tarih olarak okunamayan girdiler yok sayıldı: " + ", ".join(gecersiz))
+
+    # Sonuçları session state'te tutuyoruz; aksi halde tablo filtresi gibi bir
+    # widget'a dokunulduğunda st.button tekrar False dönüp sonuçlar kaybolur.
+    ayarlar = (getattr(uploaded_file, 'name', ''), getattr(uploaded_file, 'size', 0),
+               donem, tuple(sorted(tatiller)))
+    if st.session_state.get('ayarlar') != ayarlar:
+        st.session_state.pop('sonuc', None)  # ayar değişti, eski sonuç geçersiz
+
+    if hesapla_btn:
+        with st.spinner("✨ Veriler işleniyor, lütfen bekleyin..."):
+            try:
+                st.session_state['sonuc'] = hesaplama.hesapla(veri, donem, tatiller)
+                st.session_state['ayarlar'] = ayarlar
+            except Exception as hata:
+                st.error(f"Beklenmeyen bir hata oluştu: {hata}")
             else:
                 st.toast('Hesaplama Başarılı!', icon='✅')
-                
-                # --- Özet Metrikler ---
-                st.markdown("### 📊 Genel Özet")
-                m1, m2, m3 = st.columns(3)
-                toplam_calisan = sonuc['Sicil No / TC'].nunique()
-                toplam_hafta = sonuc.shape[0]
-                toplam_destek_saat = sonuc['Destek Saat'].sum()
-                
-                with m1:
-                    st.metric("Toplam Çalışan", f"{toplam_calisan} Kişi")
-                with m2:
-                    st.metric("İncelenen Hafta Kaydı", f"{toplam_hafta} Kayıt")
-                with m3:
-                    st.metric("Toplam Destek Saati", f"{toplam_destek_saat} Saat")
-                
-                st.divider()
-                
-                # Sonuçları göster
-                st.markdown("### 📑 Hesaplama Sonuçları")
-                st.dataframe(sonuc, use_container_width=True, height=400)
-                
-                # İndirme işlemi için veriyi Excel'e çevir
-                buffer = io.BytesIO()
-                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                    sonuc.to_excel(writer, index=False, sheet_name='Destek_Sonuclari')
-                
-                # Stream pointer'ı başa al
-                buffer.seek(0)
-                
-                col3, col4, col5 = st.columns([1, 2, 1])
-                with col4:
-                    st.download_button(
-                        label="📥 Excel Olarak Bilgisayarına İndir",
-                        data=buffer,
-                        file_name="teknopark_destek_sonuclari.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True
-                    )
-                
-        except Exception as e:
-            st.error(f"Beklenmeyen bir hata oluştu: {e}")
 
+    sonuc = st.session_state.get('sonuc')
+    if sonuc is not None:
+        # --- Özet Metrikler ---
+        st.markdown("### 📊 Genel Özet")
+        raporlu = sonuc[sonuc['Rapor Durumu'] == 'Raporlu']
+        m1, m2, m3, m4 = st.columns(4)
+        with m1:
+            st.metric("Toplam Personel", f"{len(sonuc)} Kişi")
+        with m2:
+            st.metric("Raporlu Personel", f"{len(raporlu)} Kişi")
+        with m3:
+            st.metric("Toplam Destek Günü", f"{sonuc['Destek Gün'].sum():,.1f} Gün")
+        with m4:
+            st.metric("Toplam Kesinti", f"{sonuc['Toplam Kesinti'].sum():,.1f} Gün")
+
+        uyarililar = sonuc[sonuc['Uyarı'] != '']
+        if not uyarililar.empty:
+            st.warning(
+                f"{len(uyarililar)} personelde izin gün sayısı ile resmi tatil takvimi "
+                "uyuşmuyor. Ayrıntı için sonuç tablosundaki 'Uyarı' kolonuna bakın."
+            )
+
+        st.divider()
+
+        # Sonuçları göster
+        st.markdown("### 📑 Hesaplama Sonuçları")
+        sadece_kesintili = st.checkbox(
+            "Yalnızca kesintisi olan personeli göster", value=True,
+            help=f"Kesintisi olmayan personel tam {hesaplama.TESVIK_TABAN_GUN} gün destek alır.",
+        )
+        gosterilen = sonuc[sonuc['Toplam Kesinti'] > 0] if sadece_kesintili else sonuc
+
+        if gosterilen.empty:
+            st.info("Bu dönemde kesintisi olan personel bulunmuyor.")
+        else:
+            st.dataframe(
+                gosterilen.style.apply(
+                    lambda satir: ['background-color: #fef2f2'] * len(satir)
+                    if satir['Rapor Durumu'] == 'Raporlu' else [''] * len(satir),
+                    axis=1,
+                ),
+                width='stretch',
+                height=400,
+            )
+
+        # İki ayrı indirme: tüm personel ve yalnızca kesintisi olanlar.
+        EXCEL_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        donem_eki = f"{donem[0]}_{donem[1]:02d}"
+
+        tumu_buffer = io.BytesIO()
+        hesaplama.excel_yaz(sonuc, tumu_buffer)
+        tumu_buffer.seek(0)
+
+        kesintililer = hesaplama.kesintili_personel(sonuc)
+
+        col3, col4 = st.columns(2)
+        with col3:
+            st.download_button(
+                label=f"📥 Tüm Personel ({len(sonuc)} kişi)",
+                data=tumu_buffer,
+                file_name=f"teknopark_destek_{donem_eki}.xlsx",
+                mime=EXCEL_MIME,
+                width='stretch',
+            )
+        with col4:
+            if kesintililer.empty:
+                st.button("Kesintisi olan personel yok", disabled=True, width='stretch')
+            else:
+                kesintili_buffer = io.BytesIO()
+                hesaplama.excel_yaz(kesintililer, kesintili_buffer,
+                                    sayfa_adi='Kesintili_Personel')
+                kesintili_buffer.seek(0)
+                st.download_button(
+                    label=f"📥 Kesintisi Olanlar ({len(kesintililer)} kişi)",
+                    data=kesintili_buffer,
+                    file_name=f"teknopark_destek_{donem_eki}_kesintili.xlsx",
+                    mime=EXCEL_MIME,
+                    width='stretch',
+                )

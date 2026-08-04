@@ -1,0 +1,34 @@
+# --- Personel verisi -------------------------------------------------------
+# Girdi izin raporları ve hesap çıktıları çalışan numarasıyla eşleşmiş sağlık
+# verisi içerir (hastalık raporu, doğum istirahati, doktor randevusu).
+# KVKK kapsamında özel nitelikli kişisel veridir; depoya ASLA girmemelidir.
+*.xlsx
+*.xls
+*.csv
+
+# İç dokümanlar
+puantaj pdf*.pdf
+
+# --- Paketleme çıktıları ---------------------------------------------------
+build/
+dist/
+*.spec
+
+# --- Python ----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# --- Yerel çalışma klasörleri ----------------------------------------------
+# GitHub'dan indirilip açılmış eski sürüm kopyası
+DestekHesap-main/
+
+# --- Editör / işletim sistemi ----------------------------------------------
+.claude/
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
