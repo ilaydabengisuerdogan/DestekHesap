@@ -1,6 +1,6 @@
 # Test Senaryoları
 
-94 senaryo, on başlıkta. Tamamı `test_hesaplama.py` içinde kodlanmıştır ve her
+105 senaryo, on bir başlıkta. Tamamı `test_hesaplama.py` içinde kodlanmıştır ve her
 değişiklikte saniyeler içinde çalışır.
 
 ```bash
@@ -209,6 +209,26 @@ tutulur; yeni bir kural için yeniden derleme gerekmez.
 | Dışa aktar ve geri yükle | Dosyaya yazılır, düzenlenip yüklenince kurallar değişir |
 | Bozuk dosya | Gömülü varsayılanlara dönülür **ve uyarı bırakılır** — sessizce yanlış hesaplanmaz |
 | Dosya yoksa | Gömülü varsayılanlar kullanılır, uyarı üretilmez (normal durum) |
+
+---
+
+## 6c. Çok yıllı resmi tatil takvimi — 10 senaryo
+
+Uygulama yıllarca kullanılacağı için takvimin hiçbir yıl boş kalmaması gerekir.
+
+| Senaryo | Beklenen sonuç |
+|---|---|
+| Gelecek yılları kapsama | 2026–2035 arası her yılda en az 15 tatil bulunur |
+| Sabit tatiller — 4 yıl | 1 Ocak, 23 Nisan, 1 Mayıs, 19 Mayıs, 15 Temmuz, 30 Ağustos, 28–29 Ekim her yıl üretilir |
+| 2026 takvimi | Elle girilen tarihlerle üretilen takvim, önceki sabit listeyle birebir aynı |
+| Doğrulanmamış yıl uyarısı | 2026 uyarı vermez; 2027 "doğrulanmadı" uyarısı verir |
+| Arife ve bayram günleri | Ramazan arife + 3 gün, Kurban arife + 4 gün |
+| Yılda iki bayram | 2033'te Ramazan hem Ocak hem Aralık'ta — ikisi de takvime girer |
+| Ayar dosyasından doğrulama | Diyanet tarihi girilince o yıl doğrulanmış sayılır, uyarı kalkar |
+
+Aritmetik Hicri takvim 2026'yı **birebir** tutturdu (0 gün sapma), ancak Diyanet
+astronomik hesap kullandığı için diğer yıllarda bir gün kayabilir. Bu yüzden
+hesaplanan tarihler doğrulanmış sayılmaz.
 
 ---
 

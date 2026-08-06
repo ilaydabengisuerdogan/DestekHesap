@@ -417,6 +417,93 @@ def test_ise_baslama_yoksa_kidem_kolonlari_bos():
     assert sonuc['Riskli'] == ''
 
 
+# ---------------------------------------------- çok yıllı resmi tatil takvimi
+
+def test_takvim_gelecek_yillari_kapsar():
+    """Uygulama yıllarca kullanılacak; hiçbir yıl tatilsiz kalmamalı."""
+    yillar = {g.year for g in hesaplama.RESMI_TATILLER}
+    assert {2026, 2027, 2030, 2035} <= yillar
+    for yil in range(2026, 2036):
+        tatiller, _ = hesaplama.resmi_tatiller_yil(yil)
+        assert len(tatiller) >= 15, f"{yil} yılında yalnızca {len(tatiller)} tatil"
+
+
+@pytest.mark.parametrize('yil', [2026, 2027, 2030, 2035])
+def test_sabit_tatiller_her_yil_uretilir(yil):
+    """15 Temmuz, 1 Ocak gibi sabit tarihler her yıl takvimde olmalı."""
+    tatiller, _ = hesaplama.resmi_tatiller_yil(yil)
+    for ay, gun in [(1, 1), (4, 23), (5, 1), (5, 19), (7, 15), (8, 30), (10, 28), (10, 29)]:
+        assert dt.date(yil, ay, gun) in tatiller
+
+
+def test_2026_takvimi_dogrulanmis_tarihlerle_uretilir():
+    """Elle girilen 2026 tarihleri, önceki sabit listeyle birebir aynı olmalı."""
+    tatiller, dogrulandi = hesaplama.resmi_tatiller_yil(2026)
+    assert dogrulandi is True
+    beklenen = {
+        (1, 1), (3, 19), (3, 20), (3, 21), (3, 22), (4, 23), (5, 1), (5, 19),
+        (5, 26), (5, 27), (5, 28), (5, 29), (5, 30), (7, 15), (8, 30), (10, 28), (10, 29),
+    }
+    assert {(g.month, g.day) for g in tatiller} == beklenen
+
+
+def test_dogrulanmamis_yil_uyari_verir():
+    """Hesaplanan dini bayram tarihleri sessizce doğru sayılmamalı."""
+    assert hesaplama.takvim_dogrulandi_mi(2026) is True
+    assert hesaplama.takvim_uyarisi((2026, 7)) is None
+
+    assert hesaplama.takvim_dogrulandi_mi(2027) is False
+    uyari = hesaplama.takvim_uyarisi((2027, 7))
+    assert uyari and 'doğrulanmadı' in uyari and '2027' in uyari
+
+
+def test_bayram_arifesi_ve_tum_gunleri_eklenir():
+    """Ramazan arife + 3 gün, Kurban arife + 4 gün sürer."""
+    tatiller, _ = hesaplama.resmi_tatiller_yil(2026)
+    for gun in range(19, 23):                      # 19-22 Mart
+        assert dt.date(2026, 3, gun) in tatiller
+    assert dt.date(2026, 3, 23) not in tatiller
+    for gun in range(26, 31):                      # 26-30 Mayıs
+        assert dt.date(2026, 5, gun) in tatiller
+    assert dt.date(2026, 5, 31) not in tatiller
+
+
+def test_yilda_iki_kez_gecen_bayram_kaybolmaz():
+    """2033'te Ramazan Bayramı hem Ocak hem Aralık ayında geçiyor."""
+    bayramlar, _ = hesaplama._dini_bayram_baslangiclari(2033)
+    ramazanlar = [t for ad, t in bayramlar if ad.startswith('ramazan')]
+    assert len(ramazanlar) == 2
+    assert {t.month for t in ramazanlar} == {1, 12}
+
+    tatiller, _ = hesaplama.resmi_tatiller_yil(2033)
+    assert dt.date(2033, 1, 3) in tatiller
+    assert dt.date(2033, 12, 23) in tatiller
+
+
+def test_ayar_dosyasindan_dini_bayram_dogrulanabilir(tmp_path):
+    """Diyanet tarihi teyit edilince o yıl doğrulanmış sayılmalı."""
+    yol = tmp_path / 'ayarlar.json'
+    hesaplama.ayarlari_disa_aktar(yol)
+    icerik = json.loads(yol.read_text(encoding='utf-8'))
+    icerik['dogrulanmis_dini_bayramlar']['2027'] = {
+        'ramazan': '11.03.2027', 'kurban': '18.05.2027',
+    }
+    yol.write_text(json.dumps(icerik, ensure_ascii=False), encoding='utf-8')
+
+    onceki = dict(hesaplama.DOGRULANMIS_DINI_BAYRAMLAR)
+    onceki_tatiller = set(hesaplama.RESMI_TATILLER)
+    try:
+        assert hesaplama.ayarlari_yukle(yol) is True
+        assert hesaplama.takvim_dogrulandi_mi(2027) is True
+        assert hesaplama.takvim_uyarisi((2027, 3)) is None
+        tatiller, _ = hesaplama.resmi_tatiller_yil(2027)
+        assert dt.date(2027, 3, 10) in tatiller       # arife
+        assert dt.date(2027, 3, 13) in tatiller       # 3. gün
+    finally:
+        hesaplama.DOGRULANMIS_DINI_BAYRAMLAR = onceki
+        hesaplama.RESMI_TATILLER = onceki_tatiller
+
+
 # ------------------------------------------------------ ayar dosyası
 
 def test_ayarlar_disa_aktarilip_geri_yuklenebilir(tmp_path):

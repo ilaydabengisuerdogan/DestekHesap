@@ -264,6 +264,8 @@ class Uygulama(tk.Tk):
         ttk.Label(kutu2, text="Dönem ve tatiller dosyadan otomatik doldurulur. "
                               "Tatil listesi hatalıysa gg.aa.yyyy biçiminde, virgülle ayırarak düzeltin.",
                   style='AltBaslik.TLabel').grid(row=1, column=0, columnspan=6, sticky='w', pady=(8, 0))
+        self.takvim_etiketi = ttk.Label(kutu2, text="", style='Uyari.TLabel', wraplength=980)
+        self.takvim_etiketi.grid(row=2, column=0, columnspan=6, sticky='w', pady=(6, 0))
 
         # --- 3. Hesapla
         kutu3 = ttk.Frame(dis)
@@ -420,10 +422,13 @@ class Uygulama(tk.Tk):
     def donem_degisti(self):
         """Dönem değişince tatil kutusunu o ayın varsayılan tatilleriyle doldur."""
         try:
-            tatiller = hesaplama.donem_tatilleri(self.donem)
+            donem = self.donem
+            tatiller = hesaplama.donem_tatilleri(donem)
         except (ValueError, TypeError):
             return
         self.tatil_degeri.set(", ".join(f"{g:%d.%m.%Y}" for g in tatiller))
+        # Dini bayram tarihleri kayar; doğrulanmamış yılda kullanıcıyı uyar.
+        self.takvim_etiketi.config(text=hesaplama.takvim_uyarisi(donem) or "")
         self._sonucu_temizle()
 
     def _tatilleri_coz(self):

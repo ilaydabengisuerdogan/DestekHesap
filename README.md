@@ -144,7 +144,7 @@ yaramaz — Gmail zip içindeki `.exe` dosyalarını da engeller.
 | `hesaplama.py` | **Kural motoru** — okuma, doğrulama, hesap, Excel yazma. Arayüzden bağımsız. |
 | `masaustu.py` | Masaüstü penceresi (tkinter). Dağıtılan uygulamanın arayüzü. |
 | `app.py` | Tarayıcı arayüzü (Streamlit). Aynı motoru kullanır. |
-| `test_hesaplama.py` | 51 test senaryosu. |
+| `test_hesaplama.py` | 105 test senaryosu. |
 | `paketle.py` | PyInstaller ile tek dosya `.exe` üretir. |
 | `kurulum.iss` / `kurulum_yap.py` | Inno Setup ile kurulum dosyası (setup) üretir. |
 | `KULLANIM.txt` | İK için kullanım kılavuzu; kurulumla birlikte dağıtılır. |
@@ -239,7 +239,7 @@ nedeniyle hesaba katılmayan yıllık izinleri bildirir.
 python -m pytest test_hesaplama.py -q
 ```
 
-94 senaryo, on başlıkta:
+105 senaryo, on bir başlıkta:
 
 | Grup | Adet | Kapsam |
 |---|---:|---|
@@ -250,6 +250,7 @@ python -m pytest test_hesaplama.py -q
 | Kıdem kademeleri ve riskli işareti | 11 | 14/20/26 gün hakkı, riskli kayıt tespiti |
 | Kısmi rapor yuvarlama | 10 | Yuvarlama eşikleri ve aylık birikim |
 | Girdi dayanıklılığı | 15 | Kimlik esnekliği, elle eşleştirme, çok sayfa, başlık bloğu |
+| Çok yıllı tatil takvimi | 10 | Sabit tatil üretimi, dini bayram kayması, doğrulama |
 | Ayar dosyası | 3 | Dışa aktarma, geri yükleme, bozuk dosyada varsayılana dönüş |
 | Çıktı dosyaları | 2 | İkili Excel üretimi |
 | Tatil takvimi uyarısı | 2 | Takvim sapması tespiti |
@@ -274,10 +275,18 @@ Veri dosyalarını depoya eklemeyin.
 
 ## Bakım notları
 
-- **Resmi tatil takvimi** `hesaplama.py` içinde 2026 yılı için gömülüdür. Yeni yıla
-  geçildiğinde güncellenmelidir. Güncellenmezse program sessizce yanlış hesaplamaz;
-  dosyadaki gün sayılarıyla karşılaştırıp çıktının `Uyarı` kolonunda sapmayı bildirir.
-  Dini bayram tarihleri gerçek veriyle doğrulanmamıştır, kullanım öncesi kontrol edilmelidir.
+- **Resmi tatil takvimi** üç katmanlıdır ve yıllarca güncelleme gerektirmeden çalışır:
+  - *Sabit tarihli tatiller* (1 Ocak, 23 Nisan, 1 Mayıs, 19 Mayıs, 15 Temmuz,
+    30 Ağustos, 28–29 Ekim) her yıl için koddan üretilir.
+  - *Dini bayramlar* kayar. Diyanet takviminden teyit edilmiş yıllar
+    `DOGRULANMIS_DINI_BAYRAMLAR` içinde tutulur; tanımlı olmayan yıllar aritmetik
+    Hicri takvimden hesaplanır ve **doğrulanmamış** sayılır — o dönem için hesap
+    yapıldığında arayüzde uyarı çıkar.
+  - `ayarlar.json` hepsini ezebilir. Teyit edilen yıl eklendiğinde uyarı kalkar,
+    yeniden derleme gerekmez.
+
+  Şu an yalnızca **2026** doğrulanmıştır. Algoritma 2026'yı birebir tutturmuştur,
+  ancak Diyanet astronomik hesap kullandığı için diğer yıllarda bir gün sapabilir.
 - **Kural değişirse** `hesaplama.py` güncellenir, testler çalıştırılır, `python paketle.py`
   ile yeni `.exe` üretilir. Hangi izin türlerinin düşeceği tek bir sabitte tutulur
   (`KESINTI_IZIN_TURLERI`).

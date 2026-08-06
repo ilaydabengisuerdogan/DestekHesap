@@ -347,13 +347,38 @@ Acmak icin:
    Baslat menusu > Teknopark Destek Hesaplama
                  > Kurallari Duzenle
 
-Ornek icerik:
+  >> RESMI TATILLER VE DINI BAYRAMLAR
+
+  Sabit tarihli tatiller (1 Ocak, 23 Nisan, 1 Mayis,
+  19 Mayis, 15 Temmuz, 30 Agustos, 28-29 Ekim) her yil
+  icin OTOMATIK uretilir. Bunlari yazmaniza gerek yoktur.
+
+  Dini bayramlar her yil kayar. Program bunlari hesaplar,
+  ama Diyanet takvimiyle 1 gun sapabilir. Bu yuzden:
+
+     - Dogrulanmis yillar icin uyari CIKMAZ
+     - Dogrulanmamis yillar icin ekranda SARI UYARI
+       gosterilir ve hesaplanan tarihler yazilir
+
+  Diyanet takviminden teyit ettiginiz yili su sekilde
+  ekleyin (bayramin 1. gunu yazilir, arife ve kalan
+  gunler otomatik eklenir):
+
+   "dogrulanmis_dini_bayramlar": {
+     "2026": { "ramazan": "20.03.2026",
+               "kurban":  "27.05.2026" },
+     "2027": { "ramazan": "10.03.2027",
+               "kurban":  "17.05.2027" }
+   }
+
+  Takvimi tamamen elle yonetmek isterseniz:
 
    "resmi_tatiller": [
-     "01.01.2026",
-     "15.07.2026",
-     "29.10.2026"
-   ],
+     "01.01.2027", "15.07.2027", "29.10.2027"
+   ]
+
+  Diger ayarlar:
+
    "tesvik_taban_gun": 30
 
 Duzenledikten sonra kaydedip programi yeniden baslatin.

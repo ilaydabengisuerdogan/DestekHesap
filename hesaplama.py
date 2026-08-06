@@ -106,34 +106,156 @@ YILLIK_IZIN_HAK_KADEMELERI = [
     (0, 0),
 ]
 
-# Resmi tatil takvimi. Dini bayramlar yıldan yıla kaydığı için liste elle
-# güncellenir; arayüzden de dönem bazında düzenlenebilir.
-# Temmuz 2026 girdisiyle doğrulanan tarihler: 15.07 (dönem içi) ve 28-29.10.
-# Ramazan/Kurban Bayramı tarihleri veriyle doğrulanmadı, kullanım öncesi kontrol edilmeli.
-# Takvim eksikse tutarlilik_uyarisi() sapmayı çıktıdaki 'Uyarı' kolonunda bildirir.
-RESMI_TATILLER = {
-    dt.date(2026, 1, 1),    # Yılbaşı
-    dt.date(2026, 3, 19),   # Ramazan Bayramı Arifesi (yarım gün, tam gün sayılıyor)
-    dt.date(2026, 3, 20),   # Ramazan Bayramı 1. Gün
-    dt.date(2026, 3, 21),   # Ramazan Bayramı 2. Gün
-    dt.date(2026, 3, 22),   # Ramazan Bayramı 3. Gün
-    dt.date(2026, 4, 23),   # Ulusal Egemenlik ve Çocuk Bayramı
-    dt.date(2026, 5, 1),    # Emek ve Dayanışma Günü
-    dt.date(2026, 5, 19),   # Atatürk'ü Anma, Gençlik ve Spor Bayramı
-    dt.date(2026, 5, 26),   # Kurban Bayramı Arifesi
-    dt.date(2026, 5, 27),   # Kurban Bayramı 1. Gün
-    dt.date(2026, 5, 28),   # Kurban Bayramı 2. Gün
-    dt.date(2026, 5, 29),   # Kurban Bayramı 3. Gün
-    dt.date(2026, 5, 30),   # Kurban Bayramı 4. Gün
-    dt.date(2026, 7, 15),   # Demokrasi ve Millî Birlik Günü
-    dt.date(2026, 8, 30),   # Zafer Bayramı
-    dt.date(2026, 10, 28),  # Cumhuriyet Bayramı Arifesi
-    dt.date(2026, 10, 29),  # Cumhuriyet Bayramı
+# --- Resmi tatil takvimi ---------------------------------------------------
+# Takvim üç katmandan oluşur:
+#   1. Sabit tarihli tatiller — her yıl aynı gündedir, koddan üretilir.
+#   2. Dini bayramlar — yıldan yıla kayar. Diyanet takvimiyle doğrulanmış yıllar
+#      DOGRULANMIS_DINI_BAYRAMLAR'da tutulur; tanımlı olmayan yıllar için
+#      aritmetik Hicri takvimden hesaplanır ve "doğrulanmamış" sayılır.
+#   3. ayarlar.json — yukarıdakilerin hepsini ezebilir.
+# Doğrulanmamış bir yıl için hesap yapılırsa arayüz uyarı gösterir; sessizce
+# yanlış takvimle hesaplanmaz.
+
+# (ay, gün) — her yıl sabit olan resmi tatiller. Arife günleri, İK sisteminin
+# davranışına uygun olarak tam gün tatil sayılır (Temmuz 2026 verisinden doğrulandı).
+SABIT_TATILLER = [
+    (1, 1),     # Yılbaşı
+    (4, 23),    # Ulusal Egemenlik ve Çocuk Bayramı
+    (5, 1),     # Emek ve Dayanışma Günü
+    (5, 19),    # Atatürk'ü Anma, Gençlik ve Spor Bayramı
+    (7, 15),    # Demokrasi ve Millî Birlik Günü
+    (8, 30),    # Zafer Bayramı
+    (10, 28),   # Cumhuriyet Bayramı Arifesi
+    (10, 29),   # Cumhuriyet Bayramı
+]
+
+# Dini bayramların 1. günü (arife bir önceki gündür).
+# Ramazan 3 gün + arife, Kurban 4 gün + arife sürer.
+# Buraya yalnızca Diyanet takvimiyle KONTROL EDİLMİŞ yıllar yazılmalıdır.
+DOGRULANMIS_DINI_BAYRAMLAR = {
+    2026: {'ramazan': (3, 20), 'kurban': (5, 27)},
 }
+
+# Takvimin önceden hesaplanacağı yıl aralığı.
+TAKVIM_ILK_YIL = 2020
+TAKVIM_SON_YIL = 2040
 
 
 class GirdiHatasi(Exception):
     """Girdi dosyası beklenen şemaya uymadığında fırlatılır."""
+
+
+# --------------------------------------------------------------- takvim
+
+def _hicri_gregoryen(hicri_yil, hicri_ay, hicri_gun):
+    """
+    Aritmetik (tabular) Hicri takvimden Gregoryen tarihe çevirir.
+
+    Diyanet astronomik hesap kullandığı için bazı yıllarda 1 gün sapabilir;
+    bu yüzden buradan üretilen tarihler "doğrulanmamış" sayılır.
+    """
+    gun_sayisi = (int((11 * hicri_yil + 3) / 30) + 354 * hicri_yil + 30 * hicri_ay
+                  - int((hicri_ay - 1) / 2) + hicri_gun + 1948440 - 385)
+    l = gun_sayisi + 68569
+    n = int((4 * l) / 146097)
+    l -= int((146097 * n + 3) / 4)
+    i = int((4000 * (l + 1)) / 1461001)
+    l = l - int((1461 * i) / 4) + 31
+    j = int((80 * l) / 2447)
+    g = l - int((2447 * j) / 80)
+    l = int(j / 11)
+    a = j + 2 - 12 * l
+    y = 100 * (n - 49) + i + l
+    return dt.date(y, a, g)
+
+
+# Bayram adı -> resmi tatil gün sayısı (arife ayrıca eklenir).
+BAYRAM_SURELERI = {'ramazan': 3, 'kurban': 4}
+
+
+def _bayram_suresi(ad):
+    """Ad 'ramazan2' gibi numaralı da olabilir; baştaki kelimeye bakılır."""
+    for anahtar, sure in BAYRAM_SURELERI.items():
+        if str(ad).lower().startswith(anahtar):
+            return sure
+    return 1
+
+
+def _dini_bayram_baslangiclari(yil):
+    """
+    Verilen yıla düşen dini bayramların 1. günlerini döner.
+
+    Bir Gregoryen yılda aynı bayram iki kez geçebilir (örn. 2033'te Ramazan
+    Bayramı hem Ocak hem Aralık ayında), bu yüzden liste döner.
+
+    Döner: ([(ad, date), ...], dogrulandi_mi)
+    """
+    elle = DOGRULANMIS_DINI_BAYRAMLAR.get(yil)
+    if elle:
+        return (sorted(((ad, dt.date(yil, *gun)) for ad, gun in elle.items()),
+                       key=lambda x: x[1]), True)
+
+    # Hicri yıl kabaca: (Gregoryen - 622) * 33 / 32
+    yaklasik = int((yil - 622) * 33 / 32)
+    bulunan = []
+    for hicri_yil in range(yaklasik - 2, yaklasik + 3):
+        for ad, (ay, gun) in (('ramazan', (10, 1)), ('kurban', (12, 10))):
+            try:
+                tarih = _hicri_gregoryen(hicri_yil, ay, gun)
+            except (ValueError, OverflowError):
+                continue
+            if tarih.year == yil and (ad, tarih) not in bulunan:
+                bulunan.append((ad, tarih))
+    return (sorted(bulunan, key=lambda x: x[1]), False)
+
+
+def resmi_tatiller_yil(yil):
+    """Verilen yılın tüm resmi tatilleri. Döner: (tarih kümesi, dogrulandi_mi)."""
+    tatiller = {dt.date(yil, ay, gun) for ay, gun in SABIT_TATILLER}
+
+    bayramlar, dogrulandi = _dini_bayram_baslangiclari(yil)
+    for ad, baslangic in bayramlar:
+        # Arife (-1) dahil, bayramın tüm günleri
+        for kayma in range(-1, _bayram_suresi(ad)):
+            tatiller.add(baslangic + dt.timedelta(days=kayma))
+
+    return tatiller, dogrulandi
+
+
+def takvim_uret(ilk_yil=None, son_yil=None):
+    """Yıl aralığı için tüm resmi tatilleri tek kümede toplar."""
+    ilk_yil = ilk_yil or TAKVIM_ILK_YIL
+    son_yil = son_yil or TAKVIM_SON_YIL
+    tatiller = set()
+    for yil in range(ilk_yil, son_yil + 1):
+        tatiller |= resmi_tatiller_yil(yil)[0]
+    return tatiller
+
+
+def takvim_dogrulandi_mi(yil):
+    """Verilen yılın dini bayram tarihleri Diyanet takvimiyle teyit edildi mi?"""
+    return yil in DOGRULANMIS_DINI_BAYRAMLAR
+
+
+def takvim_uyarisi(donem):
+    """
+    Dönemin takvimi güvenilir mi? Değilse kullanıcıya gösterilecek metin döner.
+
+    Doğrulanmamış bir yılın dini bayram tarihleri hesaplanmıştır; Diyanet'in
+    ilan ettiği tarihten bir gün sapabilir.
+    """
+    yil = donem[0]
+    if takvim_dogrulandi_mi(yil):
+        return None
+    bayramlar, _ = _dini_bayram_baslangiclari(yil)
+    if not bayramlar:
+        return (f"{yil} yılı için dini bayram tarihleri hesaplanamadı. "
+                f"Resmi tatilleri elle kontrol edin.")
+    ozet = " · ".join(f"{ad.capitalize()} Bayramı {tarih:%d.%m.%Y}"
+                      for ad, tarih in bayramlar)
+    return (f"{yil} yılının dini bayram tarihleri Diyanet takvimiyle "
+            f"doğrulanmadı, hesaplanarak bulundu ({ozet}). Bir gün sapabilir; "
+            f"dönem bu tarihlere denk geliyorsa kontrol edin.")
 
 
 # ------------------------------------------------------------ ayar dosyası
@@ -208,6 +330,23 @@ def ayarlari_yukle(yol=None):
             deger = [tuple(k) for k in deger]
         globals()[degisken] = deger
 
+    # Diyanet takviminden teyit edilmiş dini bayram tarihleri.
+    # Biçim: {"2027": {"ramazan": "10.03.2027", "kurban": "17.05.2027"}}
+    if 'dogrulanmis_dini_bayramlar' in ayarlar:
+        global DOGRULANMIS_DINI_BAYRAMLAR
+        cozulen = {}
+        for yil, bayramlar in ayarlar['dogrulanmis_dini_bayramlar'].items():
+            for ad, metin in bayramlar.items():
+                try:
+                    tarih = dt.datetime.strptime(str(metin), '%d.%m.%Y').date()
+                    cozulen.setdefault(int(yil), {})[ad] = (tarih.month, tarih.day)
+                except ValueError:
+                    hatali.append(f"{yil} {ad}: {metin}")
+        if cozulen:
+            DOGRULANMIS_DINI_BAYRAMLAR = cozulen
+            RESMI_TATILLER = takvim_uret()
+
+    # Açık tatil listesi verilmişse üretilen takvimin yerine geçer.
     if 'resmi_tatiller' in ayarlar:
         tatiller = set()
         for metin in ayarlar['resmi_tatiller']:
@@ -230,6 +369,18 @@ def ayarlari_disa_aktar(yol=None):
     ayarlar = {
         '_aciklama': 'Bu dosyayı düzenleyerek kuralları yeniden derlemeden '
                      'değiştirebilirsiniz. Silerseniz gömülü varsayılanlar kullanılır.',
+        '_dini_bayram_notu': 'Sabit tarihli tatiller (1 Ocak, 23 Nisan, 15 Temmuz vb.) '
+                             'her yıl otomatik üretilir, buraya yazmaya gerek yoktur. '
+                             'Dini bayramlar kayar: Diyanet takviminden teyit ettiğiniz '
+                             'yılı aşağıya ekleyin. Eklenmeyen yıllar hesaplanır ve '
+                             'programda "doğrulanmadı" uyarısı gösterilir. '
+                             'Takvimi tamamen elle yönetmek isterseniz "resmi_tatiller" '
+                             'anahtarını gg.aa.yyyy listesi olarak ekleyin.',
+        'dogrulanmis_dini_bayramlar': {
+            str(yil): {ad: f"{gun[1]:02d}.{gun[0]:02d}.{yil}"
+                       for ad, gun in bayramlar.items()}
+            for yil, bayramlar in sorted(DOGRULANMIS_DINI_BAYRAMLAR.items())
+        },
         'kolon_esanlamlilari': KOLON_ESANLAMLILARI,
         'rapor_izin_turu': RAPOR_IZIN_TURU,
         'rapor_nedenleri': sorted(RAPOR_NEDENLERI),
@@ -240,12 +391,14 @@ def ayarlari_disa_aktar(yol=None):
         'yillik_izin_kidem_yil': YILLIK_IZIN_KIDEM_YIL,
         'yillik_izin_tam_gun_esigi_saat': YILLIK_IZIN_TAM_GUN_ESIGI_SAAT,
         'yillik_izin_hak_kademeleri': [list(k) for k in YILLIK_IZIN_HAK_KADEMELERI],
-        'resmi_tatiller': [f"{g:%d.%m.%Y}" for g in sorted(RESMI_TATILLER)],
     }
     with open(yol, 'w', encoding='utf-8') as dosya:
         json.dump(ayarlar, dosya, ensure_ascii=False, indent=2)
     return yol
 
+
+# Sabit tatiller ve dini bayramlardan yıl aralığı için takvim üretilir.
+RESMI_TATILLER = takvim_uret()
 
 # Varsa ayar dosyasındaki kurallar gömülü varsayılanların üzerine yazılır.
 ayarlari_yukle()

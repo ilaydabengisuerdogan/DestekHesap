@@ -183,26 +183,48 @@ Aşağıdakiler teşvikten düşer:
 > **Sorulacak soru:** Arife günleri gerçekten tam gün mü sayılıyor, yoksa yarım gün mü?
 > Yarım günse sistemde tatil yapısının değişmesi gerekir.
 
-### 2026 takvimi (sistemde tanımlı)
+### Takvim nasıl üretiliyor
 
-| Tarih | Tatil | Hafta içi mi? |
+Dini bayramlar her yıl kaydığı için takvim üç katmanlı çalışır:
+
+1. **Sabit tarihli tatiller** — 1 Ocak, 23 Nisan, 1 Mayıs, 19 Mayıs, 15 Temmuz,
+   30 Ağustos, 28–29 Ekim. Her yıl aynı gündedir, koddan otomatik üretilir.
+   Bu kalemde hata riski yoktur.
+2. **Dini bayramlar** — Diyanet takviminden teyit edilmiş yıllar listede tutulur.
+   Listede olmayan yıllar **aritmetik Hicri takvimden hesaplanır** ve
+   "doğrulanmadı" sayılır; program o dönemde uyarı gösterir.
+3. **`ayarlar.json`** — yukarıdakilerin hepsini ezebilir.
+
+Şu an **yalnızca 2026 doğrulanmış** durumda. 2020–2040 arası tüm yıllar takvimde
+var, ama 2026 dışındakilerin dini bayram tarihleri hesaplanmıştır.
+
+### Hesaplanan dini bayram tarihleri (teyit edilmeli)
+
+| Yıl | Ramazan Bayramı (arife dahil) | Kurban Bayramı (arife dahil) |
 |---|---|---|
-| 01.01.2026 | Yılbaşı | Perşembe |
-| 19.03.2026 | Ramazan Bayramı Arifesi | Perşembe |
-| 20–22.03.2026 | Ramazan Bayramı | 20'si Cuma, 21–22 hafta sonu |
-| 23.04.2026 | Ulusal Egemenlik ve Çocuk Bayramı | Perşembe |
-| 01.05.2026 | Emek ve Dayanışma Günü | Cuma |
-| 19.05.2026 | Gençlik ve Spor Bayramı | Salı |
-| 26.05.2026 | Kurban Bayramı Arifesi | Salı |
-| 27–30.05.2026 | Kurban Bayramı | 30'u Cumartesi |
-| 15.07.2026 | Demokrasi ve Millî Birlik Günü | Çarşamba |
-| 30.08.2026 | Zafer Bayramı | **Pazar** |
-| 28.10.2026 | Cumhuriyet Bayramı Arifesi | Çarşamba |
-| 29.10.2026 | Cumhuriyet Bayramı | Perşembe |
+| **2026** | 19–22 Mart ✔ doğrulanmış | 26–30 Mayıs ✔ doğrulanmış |
+| 2027 | 09–12 Mart | 16–20 Mayıs |
+| 2028 | 26–29 Şubat | 04–08 Mayıs |
+| 2029 | 14–17 Şubat | 23–27 Nisan |
+| 2030 | 04–07 Şubat | 13–17 Nisan |
+| 2031 | 24–27 Ocak | 02–06 Nisan |
+| 2032 | 13–16 Ocak | 21–25 Mart |
+| 2033 | 02–05 Ocak **ve** 22–25 Aralık | 11–15 Mart |
 
-> **Sorulacak soru:** Ramazan (19–22 Mart) ve Kurban (26–30 Mayıs) tarihleri doğru mu?
-> Bunlar gerçek veriyle doğrulanamadı — Temmuz dosyası o aylara denk gelmiyor.
-> 15.07 ve 28–29.10 veriyle doğrulandı.
+> Algoritma 2026'yı **birebir** tutturdu (0 gün sapma), ama Diyanet astronomik
+> hesap kullandığı için bazı yıllarda 1 gün kayabilir.
+>
+> **Sorulacak soru:** Yukarıdaki tarihler Diyanet takvimiyle uyuşuyor mu?
+> Teyit edilen yıl `ayarlar.json` içindeki `dogrulanmis_dini_bayramlar`
+> bölümüne eklenince uyarı kalkar — kod değişikliği gerekmez:
+>
+> ```json
+> "dogrulanmis_dini_bayramlar": {
+>   "2026": { "ramazan": "20.03.2026", "kurban": "27.05.2026" },
+>   "2027": { "ramazan": "10.03.2027", "kurban": "17.05.2027" }
+> }
+> ```
+> (Girilen tarih bayramın **1. günüdür**; arife ve kalan günler otomatik eklenir.)
 
 ---
 
@@ -213,7 +235,7 @@ Aşağıdakiler teşvikten düşer:
 | 1 | Raporlu personelde yıllık izin düşüyor mu? (D3) | 5 personel, toplam 15 gün |
 | 2 | Ücretsiz izinde hafta sonları da düşmeli mi? (H2) | Ücretsiz izinli her personel |
 | 3 | Arife günleri tam gün mü, yarım gün mü? (I2) | Mart, Mayıs, Ekim dönemleri |
-| 4 | Ramazan/Kurban 2026 tarihleri doğru mu? (I3) | Mart ve Mayıs dönemleri |
+| 4 | Hesaplanan dini bayram tarihleri Diyanet'le uyuşuyor mu? (I) | 2027 ve sonrası |
 | 5 | `Destek Saat = Gün × 8` doğru mu? (A2) | Tüm çıktı |
 | 6 | Ay sonu haftasının hafta sonu kaybolması kabul edilebilir mi? (E3) | Ay sonunda raporu biten personel |
 | 7 | Yuvarlama eşiği yıllık izinde 4:30, raporda 4:00 — doğru mu? (G) | Şu an fark yaratmıyor |
