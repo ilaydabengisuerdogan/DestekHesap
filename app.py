@@ -206,10 +206,12 @@ if veri is not None:
 
         uyarililar = sonuc[sonuc['Uyarı'] != '']
         if not uyarililar.empty:
-            st.warning(
-                f"{len(uyarililar)} personelde izin gün sayısı ile resmi tatil takvimi "
-                "uyuşmuyor. Ayrıntı için sonuç tablosundaki 'Uyarı' kolonuna bakın."
-            )
+            takvim = uyarililar['Uyarı'].str.contains('resmi tatil listesi').sum()
+            mesaj = f"{len(uyarililar)} personelde not var."
+            if takvim:
+                mesaj += (f" {takvim} tanesinde izin gün sayısı resmi tatil takvimiyle "
+                          "uyuşmuyor — tatil listesini kontrol edin.")
+            st.warning(mesaj + " Ayrıntı için sonuç tablosundaki 'Uyarı' kolonuna bakın.")
 
         st.divider()
 

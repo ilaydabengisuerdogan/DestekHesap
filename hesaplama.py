@@ -11,8 +11,12 @@ Kurallar tek yerde toplandığı için formül değişirse güncelleme tek nokta
 
 import calendar
 import datetime as dt
+import json
+import math
 import os
 import re
+import sys
+from pathlib import Path
 
 import pandas as pd
 
@@ -26,8 +30,12 @@ TR_HARF_HARITASI = str.maketrans({
 BASLIK_ARAMA_DERINLIGI = 15
 
 # --- Girdi şeması ---
+# Personeli tanımlayan kolon. Dosyada çalışan numarası da ad soyad da olabilir;
+# hangisi bulunursa o kullanılır ve çıktıda kendi adıyla yer alır.
+KIMLIK_KOLONU = 'Personel'
+
 KOLONLAR = [
-    'Çalışan Numarası',
+    KIMLIK_KOLONU,
     'Şirket',
     'İzin Türü',
     'İzin Nedeni',
@@ -37,13 +45,19 @@ KOLONLAR = [
     'quantityInHours',
 ]
 
+# Zorunlu olmayan, bulunursa kurallarda kullanılan kolonlar.
+ISE_BASLAMA_KOLONU = 'İşe Başlama Tarihi'
+ISTEGE_BAGLI_KOLONLAR = [ISE_BASLAMA_KOLONU]
+
 # Kolon adı farklılıklarına tolerans. Birebir eşleşme bulunamazsa bu adlar
 # denenir; büyük/küçük harf, Türkçe karakter ve noktalama farkları önemsizdir.
-# 'Sicil No' burada çalışan numarasının karşılığıdır; dosyada ayrıca
-# 'Çalışan Numarası' varsa o öncelikli olur, 'Sicil No' ek kolon olarak taşınır.
+# Kimlik için önce numara alanları, bulunamazsa ad soyad alanları denenir.
 KOLON_ESANLAMLILARI = {
-    'Çalışan Numarası': ['Sicil No', 'Sicil Numarası', 'Personel No', 'Personel Numarası',
-                         'Çalışan No', 'Employee Id', 'Employee Number', 'TC', 'TC Kimlik No'],
+    KIMLIK_KOLONU: ['Çalışan Numarası', 'Sicil No', 'Sicil Numarası', 'Personel No',
+                    'Personel Numarası', 'Çalışan No', 'Employee Id', 'Employee Number',
+                    'TC', 'TC Kimlik No',
+                    'Ad Soyad', 'Adı Soyadı', 'Ad ve Soyad', 'İsim', 'Personel Adı',
+                    'Çalışan Adı', 'Ad-Soyad', 'Full Name', 'Employee Name'],
     'Şirket': ['Firma', 'Şirket Adı', 'Company'],
     'İzin Türü': ['İzin Tipi', 'Devamsızlık Tipi', 'Leave Type'],
     'İzin Nedeni': ['İzin Sebebi', 'Neden', 'Açıklama', 'Leave Reason'],
@@ -51,6 +65,8 @@ KOLON_ESANLAMLILARI = {
     'İzin Bitiş Tarihi': ['Bitiş Tarihi', 'Bitiş', 'Son Gün', 'End Date'],
     'quantityInDays': ['Gün', 'Gün Sayısı', 'İzin Gün Sayısı', 'Days'],
     'quantityInHours': ['Saat', 'Saat Sayısı', 'İzin Saat Sayısı', 'Hours'],
+    ISE_BASLAMA_KOLONU: ['İşe Giriş Tarihi', 'İşe Başlangıç Tarihi', 'Giriş Tarihi',
+                         'Start Of Employment', 'Hire Date'],
 }
 
 # --- Kural sabitleri ---
@@ -61,9 +77,34 @@ RAPOR_NEDENLERI = {'Hastalık Raporu', 'Kadın Doğum İstirahat Raporu'}
 # randevusu, doğum günü izni vb.) ve Evlilik İzni buraya dahil değildir.
 KESINTI_IZIN_TURLERI = {'Yıllık İzin'}
 
+# Rapor durumundan bağımsız olarak her personelde düşen izin türleri.
+# Ücretsiz izinde ücret ödenmediği ve SGK primi yatmadığı için o günlerde
+# teşvikten yararlanılamaz (İK kural dokümanı, Kural 2).
+HER_KOSULDA_KESINTI_TURLERI = {'Ücretsiz İzin'}
+
+# Yıllık ücretli izin hakkı için gereken kıdem (İş Kanunu Madde 53), yıl olarak.
+# Bir yılını doldurmamış personelin "Yıllık İzin" kaydı, aynı dönemde raporu
+# olsa dahi teşvikten düşülmez; yasal olarak hak edilmemiş bir izindir.
+YILLIK_IZIN_KIDEM_YIL = 1
+
 TESVIK_TABAN_GUN = 30
 GUNLUK_SAAT = 8
 YARIM_GUN_SAAT = GUNLUK_SAAT / 2
+
+# Yıllık izinde gün sayımı (İK kural dokümanı, Kural 3):
+# Bir günde bu eşiğin üzerinde izin kullanılırsa o gün tam gün sayılır,
+# altındaysa yarım gün sayılır. Yarım günler ay boyunca toplanıp yukarı
+# yuvarlanır: 0,5 + 0,5 = 1 tam gün (iki ayrı tam gün değil).
+YILLIK_IZIN_TAM_GUN_ESIGI_SAAT = 4.5
+
+# Yıllık ücretli izin hakkı kademeleri (İş Kanunu Madde 53).
+# (asgari kıdem yılı, hak edilen gün) — büyükten küçüğe denenir.
+YILLIK_IZIN_HAK_KADEMELERI = [
+    (15, 26),
+    (5, 20),
+    (1, 14),
+    (0, 0),
+]
 
 # Resmi tatil takvimi. Dini bayramlar yıldan yıla kaydığı için liste elle
 # güncellenir; arayüzden de dönem bazında düzenlenebilir.
@@ -93,6 +134,121 @@ RESMI_TATILLER = {
 
 class GirdiHatasi(Exception):
     """Girdi dosyası beklenen şemaya uymadığında fırlatılır."""
+
+
+# ------------------------------------------------------------ ayar dosyası
+
+AYAR_DOSYASI = 'ayarlar.json'
+
+# Ayar dosyasından değiştirilebilen alanlar: {json anahtarı: modül değişkeni}
+AYARLANABILIR = {
+    'kolon_esanlamlilari': 'KOLON_ESANLAMLILARI',
+    'rapor_izin_turu': 'RAPOR_IZIN_TURU',
+    'rapor_nedenleri': 'RAPOR_NEDENLERI',
+    'kesinti_izin_turleri': 'KESINTI_IZIN_TURLERI',
+    'her_kosulda_kesinti_turleri': 'HER_KOSULDA_KESINTI_TURLERI',
+    'tesvik_taban_gun': 'TESVIK_TABAN_GUN',
+    'gunluk_saat': 'GUNLUK_SAAT',
+    'yillik_izin_kidem_yil': 'YILLIK_IZIN_KIDEM_YIL',
+    'yillik_izin_tam_gun_esigi_saat': 'YILLIK_IZIN_TAM_GUN_ESIGI_SAAT',
+    'yillik_izin_hak_kademeleri': 'YILLIK_IZIN_HAK_KADEMELERI',
+}
+
+# Küme olarak tutulan alanlar (JSON'da liste gelir).
+KUME_ALANLARI = {'RAPOR_NEDENLERI', 'KESINTI_IZIN_TURLERI', 'HER_KOSULDA_KESINTI_TURLERI'}
+
+ayar_uyarisi = None   # ayar dosyası okunamazsa nedeni burada tutulur
+
+
+def ayar_dosyasi_yolu():
+    """
+    Ayar dosyasının aranacağı yer.
+
+    Paketlenmiş .exe'de dosyanın yanına, kaynaktan çalışırken proje klasörüne
+    bakılır; böylece kural değişikliği için yeniden derleme gerekmez.
+    """
+    if getattr(sys, 'frozen', False):
+        kok = Path(sys.executable).parent
+    else:
+        kok = Path(__file__).parent
+    return kok / AYAR_DOSYASI
+
+
+def ayarlari_yukle(yol=None):
+    """
+    Varsa ayar dosyasını okuyup modül sabitlerinin üzerine yazar.
+
+    Dosya yoksa gömülü varsayılanlar kullanılır — bu normal durumdur.
+    Dosya bozuksa varsayılanlara dönülür ve `ayar_uyarisi` doldurulur;
+    sessizce yanlış kuralla hesaplamaktansa durumu görünür kılmak için.
+    """
+    global ayar_uyarisi, RESMI_TATILLER
+    ayar_uyarisi = None
+    yol = Path(yol) if yol else ayar_dosyasi_yolu()
+    if not yol.exists():
+        return False
+
+    try:
+        # utf-8-sig: Not Defteri gibi editörler dosyayı BOM ile kaydedebilir;
+        # BOM'lu dosya düz utf-8 ile okunduğunda ayarlar sessizce yok sayılırdı.
+        with open(yol, encoding='utf-8-sig') as dosya:
+            ayarlar = json.load(dosya)
+    except Exception as hata:
+        ayar_uyarisi = f"{yol.name} okunamadı, gömülü kurallar kullanılıyor: {hata}"
+        return False
+
+    hatali = []
+    for anahtar, degisken in AYARLANABILIR.items():
+        if anahtar not in ayarlar:
+            continue
+        deger = ayarlar[anahtar]
+        if degisken in KUME_ALANLARI:
+            deger = set(deger)
+        elif degisken == 'YILLIK_IZIN_HAK_KADEMELERI':
+            deger = [tuple(k) for k in deger]
+        globals()[degisken] = deger
+
+    if 'resmi_tatiller' in ayarlar:
+        tatiller = set()
+        for metin in ayarlar['resmi_tatiller']:
+            try:
+                tatiller.add(dt.datetime.strptime(str(metin), '%d.%m.%Y').date())
+            except ValueError:
+                hatali.append(str(metin))
+        if tatiller:
+            RESMI_TATILLER = tatiller
+
+    if hatali:
+        ayar_uyarisi = (f"{yol.name}: tarih olarak okunamayan resmi tatil girdileri "
+                        f"yok sayıldı ({', '.join(hatali)})")
+    return True
+
+
+def ayarlari_disa_aktar(yol=None):
+    """Yürürlükteki kuralları düzenlenebilir bir ayar dosyası olarak yazar."""
+    yol = Path(yol) if yol else ayar_dosyasi_yolu()
+    ayarlar = {
+        '_aciklama': 'Bu dosyayı düzenleyerek kuralları yeniden derlemeden '
+                     'değiştirebilirsiniz. Silerseniz gömülü varsayılanlar kullanılır.',
+        'kolon_esanlamlilari': KOLON_ESANLAMLILARI,
+        'rapor_izin_turu': RAPOR_IZIN_TURU,
+        'rapor_nedenleri': sorted(RAPOR_NEDENLERI),
+        'kesinti_izin_turleri': sorted(KESINTI_IZIN_TURLERI),
+        'her_kosulda_kesinti_turleri': sorted(HER_KOSULDA_KESINTI_TURLERI),
+        'tesvik_taban_gun': TESVIK_TABAN_GUN,
+        'gunluk_saat': GUNLUK_SAAT,
+        'yillik_izin_kidem_yil': YILLIK_IZIN_KIDEM_YIL,
+        'yillik_izin_tam_gun_esigi_saat': YILLIK_IZIN_TAM_GUN_ESIGI_SAAT,
+        'yillik_izin_hak_kademeleri': [list(k) for k in YILLIK_IZIN_HAK_KADEMELERI],
+        'resmi_tatiller': [f"{g:%d.%m.%Y}" for g in sorted(RESMI_TATILLER)],
+    }
+    with open(yol, 'w', encoding='utf-8') as dosya:
+        json.dump(ayarlar, dosya, ensure_ascii=False, indent=2)
+    return yol
+
+
+# Varsa ayar dosyasındaki kurallar gömülü varsayılanların üzerine yazılır.
+ayarlari_yukle()
 
 
 # ---------------------------------------------------------------- yardımcılar
@@ -148,6 +304,40 @@ def kismi_gun_kesintisi(toplam_saat):
     return float(tam_gun) + ek
 
 
+def kidem_yili(ise_baslama, tarih):
+    """İşe başlama tarihinden verilen tarihe kadar tamamlanmış yıl sayısı."""
+    if ise_baslama is None or pd.isna(ise_baslama):
+        return None
+    if hasattr(ise_baslama, 'date'):
+        ise_baslama = ise_baslama.date()
+    yil = tarih.year - ise_baslama.year
+    if (tarih.month, tarih.day) < (ise_baslama.month, ise_baslama.day):
+        yil -= 1
+    return max(0, yil)
+
+
+def yillik_izin_hakki(kidem):
+    """Kıdeme göre yıllık ücretli izin hakkı, gün (İş Kanunu Madde 53)."""
+    if kidem is None:
+        return None
+    for asgari, gun in YILLIK_IZIN_HAK_KADEMELERI:
+        if kidem >= asgari:
+            return gun
+    return 0
+
+
+def yillik_izin_kismi_kesintisi(toplam_gun):
+    """
+    Yıllık izindeki yarım günlerin toplamını tam güne yuvarlar (Kural 3).
+
+    0,5 -> 1 gün · 0,5 + 0,5 -> 1 gün (iki ayrı tam gün değil) · 1,5 -> 2 gün
+    """
+    toplam_gun = round(toplam_gun, 6)
+    if toplam_gun <= 0:
+        return 0
+    return math.ceil(toplam_gun)
+
+
 def rapor_mu(satir):
     """Satır hastalık raporu ya da doğum istirahati mi?"""
     return (
@@ -168,8 +358,9 @@ def _kolonlari_esle(basliklar):
     """
     Dosyadaki başlıkları beklenen kolon adlarına eşler.
 
-    Önce birebir, sonra eşanlamlı adlar denenir. Bir kolon adı birden çok
-    beklenen kolona uyuyorsa (örn. 'Sicil No') öncelik sırası korunur.
+    Önce birebir, sonra eşanlamlı adlar denenir. Eşanlamlı listesinin sırası
+    önceliği belirler: kimlik için önce çalışan numarası alanları, bulunamazsa
+    ad soyad alanları seçilir.
     Döner: {dosyadaki_baslik: beklenen_kolon}
     """
     normalize = {b: _normalize_baslik(b) for b in basliklar}
@@ -177,7 +368,7 @@ def _kolonlari_esle(basliklar):
     kullanilan = set()
 
     # 1. tur: beklenen adın kendisiyle birebir eşleşme
-    for beklenen in KOLONLAR:
+    for beklenen in KOLONLAR + ISTEGE_BAGLI_KOLONLAR:
         hedef = _normalize_baslik(beklenen)
         for baslik, norm in normalize.items():
             if baslik not in kullanilan and norm == hedef:
@@ -201,32 +392,33 @@ def _kolonlari_esle(basliklar):
     return eslesme
 
 
-def _basligi_bul(kaynak):
+def _sayfa_ve_baslik_bul(kaynak):
     """
-    Başlık satırı ilk satırda değilse (üstte logo/başlık blokları varsa) bulur.
+    Çok sayfalı dosyada veri sayfasını ve başlık satırını bulur.
 
-    İlk BASLIK_ARAMA_DERINLIGI satır taranır, beklenen kolonlardan en çoğunu
-    içeren satır başlık kabul edilir. Döner: (df, baslik_satir_no)
+    Her sayfanın ilk BASLIK_ARAMA_DERINLIGI satırı taranır; beklenen
+    kolonlardan en çoğunu içeren satır başlık kabul edilir. Böylece
+    "Kurallar", "Açıklama" gibi yardımcı sayfalar atlanır.
+    Döner: (sayfa_adi, baslik_satir_no)
     """
-    ham = pd.read_excel(kaynak, header=None, nrows=BASLIK_ARAMA_DERINLIGI)
-    en_iyi_satir, en_iyi_skor = 0, -1
-    for i in range(len(ham)):
-        basliklar = [h for h in ham.iloc[i].tolist() if pd.notna(h)]
-        skor = len(set(_kolonlari_esle(basliklar).values()))
-        if skor > en_iyi_skor:
-            en_iyi_satir, en_iyi_skor = i, skor
-    return en_iyi_satir
+    sayfalar = pd.read_excel(kaynak, header=None, nrows=BASLIK_ARAMA_DERINLIGI,
+                             sheet_name=None)
+    en_iyi = (None, 0, -1)  # (sayfa, satir, skor)
+    for sayfa_adi, ham in sayfalar.items():
+        for i in range(len(ham)):
+            basliklar = [h for h in ham.iloc[i].tolist() if pd.notna(h)]
+            skor = len(set(_kolonlari_esle(basliklar).values()))
+            if skor > en_iyi[2]:
+                en_iyi = (sayfa_adi, i, skor)
+    return en_iyi[0], en_iyi[1]
 
 
-def oku(kaynak):
+def kolonlari_incele(kaynak):
     """
-    İzin raporu Excel'ini okur, doğrular ve normalize eder.
+    Dosyayı okumadan önce kolon yapısını çıkarır.
 
-    kaynak: dosya yolu veya dosya benzeri nesne (Streamlit upload).
-
-    Kolon adlarında büyük/küçük harf, Türkçe karakter ve yaygın eşanlamlı
-    farkları tolere edilir. Beklenenlerin dışındaki kolonlar (Ad Soyad,
-    Sicil No, Departman vb.) korunur ve çıktıya taşınır.
+    Arayüz, eksik kolon varsa kullanıcıya eşleştirme ekranı gösterebilsin diye
+    kullanılır. Döner: (dosyadaki_basliklar, otomatik_eslesme, eksik_kolonlar)
     """
     def _geri_sar():
         if hasattr(kaynak, 'seek'):
@@ -234,29 +426,73 @@ def oku(kaynak):
 
     try:
         _geri_sar()
-        baslik_satiri = _basligi_bul(kaynak)
+        sayfa, baslik_satiri = _sayfa_ve_baslik_bul(kaynak)
         _geri_sar()
-        df = pd.read_excel(kaynak, header=baslik_satiri)
+        df = pd.read_excel(kaynak, header=baslik_satiri, sheet_name=sayfa, nrows=5)
+    except Exception as hata:
+        raise GirdiHatasi(f"Excel dosyası okunamadı: {hata}") from hata
+
+    basliklar = [str(k) for k in df.columns if not str(k).startswith('Unnamed:')]
+    eslesme = _kolonlari_esle(basliklar)
+    eksik = [k for k in KOLONLAR if k not in eslesme.values()]
+    return basliklar, eslesme, eksik
+
+
+def oku(kaynak, elle_eslesme=None):
+    """
+    İzin raporu Excel'ini okur, doğrular ve normalize eder.
+
+    kaynak: dosya yolu veya dosya benzeri nesne (Streamlit upload).
+    elle_eslesme: {dosyadaki_baslik: beklenen_kolon} — otomatik tanınmayan
+                  kolonlar için kullanıcının yaptığı eşleştirme.
+
+    Kolon adlarında büyük/küçük harf, Türkçe karakter ve yaygın eşanlamlı
+    farkları tolere edilir. Personel kimliği olarak çalışan numarası ya da
+    ad soyad kabul edilir. Beklenenlerin dışındaki kolonlar korunur ve
+    çıktıya taşınır.
+    """
+    def _geri_sar():
+        if hasattr(kaynak, 'seek'):
+            kaynak.seek(0)
+
+    try:
+        _geri_sar()
+        sayfa, baslik_satiri = _sayfa_ve_baslik_bul(kaynak)
+        _geri_sar()
+        df = pd.read_excel(kaynak, header=baslik_satiri, sheet_name=sayfa)
     except Exception as hata:
         raise GirdiHatasi(f"Excel dosyası okunamadı: {hata}") from hata
 
     # Adsız/boş kolonları at, başlıkları beklenen adlara eşle.
     df = df.loc[:, [k for k in df.columns if not str(k).startswith('Unnamed:')]]
-    df = df.rename(columns=_kolonlari_esle(df.columns))
+    eslesme = _kolonlari_esle(df.columns)
+    if elle_eslesme:
+        # Kullanıcının eşleştirmesi otomatik tanımanın önüne geçer.
+        ezilen = set(elle_eslesme.values())
+        eslesme = {k: v for k, v in eslesme.items() if v not in ezilen}
+        eslesme.update({k: v for k, v in elle_eslesme.items() if k in df.columns})
+
+    # Kimlik kolonunun dosyadaki özgün adı çıktıda korunur (Ad Soyad, Sicil No...).
+    kimlik_ozgun_ad = next((k for k, v in eslesme.items() if v == KIMLIK_KOLONU), None)
+    df = df.rename(columns=eslesme)
 
     eksik = [k for k in KOLONLAR if k not in df.columns]
     if eksik:
+        gorunen = [KIMLIK_KOLONU + " (çalışan numarası veya ad soyad)"
+                   if k == KIMLIK_KOLONU else k for k in eksik]
         raise GirdiHatasi(
-            "Yüklenen dosyada şu kolonlar eksik: " + ", ".join(eksik)
-            + ".\nBeklenen kolonlar: " + ", ".join(KOLONLAR)
-            + ".\nDosyada bulunanlar: " + ", ".join(str(k) for k in df.columns)
+            "Yüklenen dosyada şu kolonlar bulunamadı: " + ", ".join(gorunen)
+            + ".\n\nDosyada bulunanlar: " + ", ".join(str(k) for k in df.columns)
         )
 
     # Beklenen kolonlar önce, tanınmayan ek kolonlar (kimlik bilgileri) sonra.
-    ek_kolonlar = [k for k in df.columns if k not in KOLONLAR]
-    df = df[KOLONLAR + ek_kolonlar].copy()
+    istege_bagli = [k for k in ISTEGE_BAGLI_KOLONLAR if k in df.columns]
+    ek_kolonlar = [k for k in df.columns
+                   if k not in KOLONLAR and k not in istege_bagli]
+    df = df[KOLONLAR + istege_bagli + ek_kolonlar].copy()
 
-    for kolon in ('İzin Başlangıç Tarihi', 'İzin Bitiş Tarihi'):
+    tarih_kolonlari = ['İzin Başlangıç Tarihi', 'İzin Bitiş Tarihi'] + istege_bagli
+    for kolon in tarih_kolonlari:
         df[kolon] = pd.to_datetime(df[kolon], errors='coerce')
 
     df['İzin Türü'] = df['İzin Türü'].fillna('').astype(str).str.strip()
@@ -266,8 +502,8 @@ def oku(kaynak):
     for kolon in ('quantityInDays', 'quantityInHours'):
         df[kolon] = pd.to_numeric(df[kolon], errors='coerce').fillna(0.0)
 
-    # Çalışan numarası ya da tarihi olmayan satırlar hesaba alınamaz.
-    df = df.dropna(subset=['Çalışan Numarası', 'İzin Başlangıç Tarihi', 'İzin Bitiş Tarihi'])
+    # Kimliği ya da tarihi olmayan satırlar hesaba alınamaz.
+    df = df.dropna(subset=[KIMLIK_KOLONU, 'İzin Başlangıç Tarihi', 'İzin Bitiş Tarihi'])
     if df.empty:
         raise GirdiHatasi("Dosyada işlenebilir veri satırı bulunamadı.")
 
@@ -276,7 +512,9 @@ def oku(kaynak):
     df.loc[ters, 'İzin Bitiş Tarihi'] = df.loc[ters, 'İzin Başlangıç Tarihi']
 
     df = df.drop_duplicates()
-    return df.reset_index(drop=True)
+    df = df.reset_index(drop=True)
+    df.attrs['kimlik_ad'] = kimlik_ozgun_ad or KIMLIK_KOLONU
+    return df
 
 
 def donem_tespit(df):
@@ -319,7 +557,12 @@ def _ek_kolon_degeri(satirlar, kolon):
     tüm farklı değerler ' / ' ile birleştirilir — sessizce yanlış tek bir
     değer göstermek yerine durum görünür kalsın.
     """
-    degerler = satirlar[kolon].dropna().astype(str).str.strip()
+    ham = satirlar[kolon].dropna()
+    if pd.api.types.is_datetime64_any_dtype(ham):
+        # Tarihler saat kısmı olmadan, gg.aa.yyyy biçiminde okunsun.
+        degerler = ham.dt.strftime('%d.%m.%Y').tolist()
+    else:
+        degerler = ham.astype(str).str.strip().tolist()
     degerler = [d for d in dict.fromkeys(degerler) if d]
     if not degerler:
         return ''
@@ -328,16 +571,47 @@ def _ek_kolon_degeri(satirlar, kolon):
     return ' / '.join(degerler)[:200]
 
 
-def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=()):
+def kidem_yeterli_mi(ise_baslama, izin_baslangic):
+    """
+    Yıllık ücretli izin hakkı için kıdem yeterli mi? (İş Kanunu Madde 53)
+
+    ise_baslama: işe başlama tarihi (None ise kural uygulanamaz, True döner)
+    Bir yılını doldurmamış personelin yıllık izni hak edilmemiş sayılır.
+
+    Gün sayısı yerine takvim yıldönümü karşılaştırılır; artık yıllarda gün
+    hesabı bir gün kaydığı için sınır tarihlerde yanlış sonuç verirdi.
+    """
+    if ise_baslama is None or pd.isna(ise_baslama):
+        return True  # bilgi yoksa kural uygulanamaz
+    if hasattr(ise_baslama, 'date'):
+        ise_baslama = ise_baslama.date()
+
+    hedef_yil = ise_baslama.year + YILLIK_IZIN_KIDEM_YIL
+    try:
+        yildonumu = ise_baslama.replace(year=hedef_yil)
+    except ValueError:  # 29 Şubat'ta işe başlayıp artık olmayan yıl
+        yildonumu = ise_baslama.replace(year=hedef_yil, day=28)
+    return izin_baslangic >= yildonumu
+
+
+def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None):
     """
     Tek personelin dönem içi destek gün/saatini ve kesinti kırılımını hesaplar.
 
     satirlar: personele ait izin satırları (DataFrame).
-    ek_kolonlar: girdide bulunan, çıktıya taşınacak kimlik kolonları
-                 (Ad Soyad, Sicil No, Departman vb.).
-    Raporu olmayan personelde hiçbir izin türü teşvikten düşmez.
+    ek_kolonlar: girdide bulunan, çıktıya taşınacak bilgi kolonları
+                 (Sicil No, Departman, İşe Başlama Tarihi vb.).
+    kimlik_ad:  kimlik kolonunun çıktıda kullanılacak adı (Ad Soyad, Sicil No...).
+
+    Ücretsiz izin her personelde düşer. Yıllık izin ve resmi tatil yalnızca
+    raporlu personelde düşer; yıllık izinde ayrıca kıdem şartı aranır.
     """
     donem_ilk, donem_son = donem_sinirlari(donem)
+    ise_baslama = None
+    if ISE_BASLAMA_KOLONU in satirlar.columns:
+        gecerli = satirlar[ISE_BASLAMA_KOLONU].dropna()
+        if not gecerli.empty:
+            ise_baslama = gecerli.iloc[0]
 
     uyarilar = []
     rapor_satirlari, diger_satirlar = [], []
@@ -354,13 +628,24 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=()):
             (satir, baslangic, bitis)
         )
 
-    sonuc = {'Çalışan Numarası': satirlar['Çalışan Numarası'].iloc[0]}
-    # Kimlik kolonları (Ad Soyad, Sicil No vb.) çalışan numarasının hemen yanında.
+    # Kıdem, dönemin ilk gününe göre hesaplanır (İş Kanunu Md. 53 kademeleri).
+    kidem = kidem_yili(ise_baslama, donem_ilk)
+    hak = yillik_izin_hakki(kidem)
+    yillik_izinli_mi = any(s['İzin Türü'] in KESINTI_IZIN_TURLERI
+                           for s, _, _ in diger_satirlar)
+
+    sonuc = {(kimlik_ad or KIMLIK_KOLONU): satirlar[KIMLIK_KOLONU].iloc[0]}
+    # Bilgi kolonları (Sicil No, Departman vb.) kimliğin hemen yanında.
     for kolon in ek_kolonlar:
         sonuc[kolon] = _ek_kolon_degeri(satirlar, kolon)
     sonuc.update({
         'Şirket': satirlar['Şirket'].iloc[0],
         'Dönem': f"{donem[0]}-{donem[1]:02d}",
+        'Kıdem (Yıl)': '' if kidem is None else kidem,
+        'Yıllık İzin Hakkı': '' if hak is None else hak,
+        # 1 yılını doldurmamış personelin yıllık izin kaydı yasal olarak hak
+        # edilmemiştir; İK'nın gözden geçirmesi için işaretlenir.
+        'Riskli': 'Evet' if (kidem is not None and kidem < 1 and yillik_izinli_mi) else '',
         'Rapor Durumu': 'Raporlu' if rapor_satirlari else 'Raporsuz',
         'Rapor Türü': ', '.join(sorted({s['İzin Nedeni'] for s, _, _ in rapor_satirlari})),
         'Rapor Gün': 0.0,
@@ -368,14 +653,34 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=()):
         'Yıllık İzin Kesintisi': 0.0,
         'Resmi Tatil Kesintisi': 0.0,
         'Kısmi Rapor Kesintisi': 0.0,
+        'Ücretsiz İzin Kesintisi': 0.0,
         'Toplam Kesinti': 0.0,
         'Destek Gün': float(TESVIK_TABAN_GUN),
         'Destek Saat': float(TESVIK_TABAN_GUN * GUNLUK_SAAT),
-        'Uyarı': ' | '.join(uyarilar),
+        'Uyarı': '',
     })
 
-    # Raporu olmayan personelde yıllık izin ve resmi tatil düşmez.
+    # (0) Ücretsiz izin: ücret ödenmediği ve SGK primi yatmadığı için rapor
+    # durumundan bağımsız olarak her personelde düşer.
+    ucretsiz_gunleri = set()
+    for satir, baslangic, bitis in diger_satirlar:
+        if satir['İzin Türü'] not in HER_KOSULDA_KESINTI_TURLERI:
+            continue
+        for gun in gun_araligi(baslangic, bitis):
+            if is_gunu(gun, tatiller):
+                ucretsiz_gunleri.add(gun)
+
     if not rapor_satirlari:
+        # Raporu olmayan personelde yıllık izin ve resmi tatil düşmez.
+        toplam = float(len(ucretsiz_gunleri))
+        destek = max(0.0, TESVIK_TABAN_GUN - toplam)
+        sonuc.update({
+            'Ücretsiz İzin Kesintisi': toplam,
+            'Toplam Kesinti': toplam,
+            'Destek Gün': destek,
+            'Destek Saat': destek * GUNLUK_SAAT,
+            'Uyarı': ' | '.join(uyarilar),
+        })
         return sonuc
 
     # (a) Rapor günleri: dönem içindeki iş günleri. Saatlik rapor tam gün
@@ -403,15 +708,34 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=()):
             if donem_ilk <= gun <= donem_son:
                 hafta_sonlari.add(gun)
 
-    # (c) Yıllık izin günleri. Mazeret İzni, Evlilik İzni gibi diğer izin
-    # türleri teşvikten düşmez; yalnızca yıllık izin ve resmi tatil düşer.
+    # (c) Yıllık izin günleri. Mazeret ve evlilik izni düşmez. Bir yılını
+    # doldurmamış personelin yıllık izni hak edilmemiş sayıldığı için düşmez.
+    # Tam gün kayıtları takvime, yarım günler ayrı havuza gider: yarım günler
+    # ay boyunca toplanıp yukarı yuvarlanır (Kural 3).
     izin_gunleri = set()
+    yarim_gun_toplami = 0.0
+    kidemsiz_atlanan = 0
     for satir, baslangic, bitis in diger_satirlar:
         if satir['İzin Türü'] not in KESINTI_IZIN_TURLERI:
+            continue
+        if not kidem_yeterli_mi(ise_baslama, satir['İzin Başlangıç Tarihi'].date()):
+            kidemsiz_atlanan += 1
+            continue
+        if satir['quantityInDays'] < 1:
+            # Eşiğin üzerindeki kısmi izin tam gün, altındaki yarım gün sayılır.
+            yarim_gun_toplami += (
+                1.0 if satir['quantityInHours'] > YILLIK_IZIN_TAM_GUN_ESIGI_SAAT else 0.5
+            )
             continue
         for gun in gun_araligi(baslangic, bitis):
             if is_gunu(gun, tatiller):
                 izin_gunleri.add(gun)
+
+    if kidemsiz_atlanan:
+        uyarilar.append(
+            f"{kidemsiz_atlanan} yıllık izin kaydı, 1 yıllık kıdem şartı "
+            f"dolmadığı için kesintiye dahil edilmedi (İş Kanunu Md. 53)"
+        )
 
     # (d) Dönem içindeki hafta içine denk gelen resmi tatiller.
     resmi_tatil_gunleri = {
@@ -419,27 +743,31 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=()):
         if g in tatiller and g.weekday() < 5
     }
 
-    # Aynı gün hem rapor hem yıllık izin olarak işaretlenmiş olabilir; mükerrer
-    # saymamak için rapor günleri kazanır. Diğer kümeler tanımı gereği ayrık:
-    # hafta sonları Cmt-Paz, resmi tatiller ise iş günü kümelerinin dışında.
+    # Aynı gün birden çok kategoride işaretlenmiş olabilir; mükerrer saymamak
+    # için rapor günleri kazanır. Hafta sonları Cmt-Paz, resmi tatiller ise
+    # iş günü kümelerinin dışında olduğu için tanımı gereği ayrık.
     izin_gunleri -= rapor_gunleri
+    ucretsiz_gunleri -= rapor_gunleri | izin_gunleri
 
     kismi_kesinti = kismi_gun_kesintisi(kismi_saat)
+    yillik_kesinti = len(izin_gunleri) + yillik_izin_kismi_kesintisi(yarim_gun_toplami)
     toplam_kesinti = (
-        len(rapor_gunleri) + len(hafta_sonlari) + len(izin_gunleri)
-        + len(resmi_tatil_gunleri) + kismi_kesinti
+        len(rapor_gunleri) + len(hafta_sonlari) + yillik_kesinti
+        + len(resmi_tatil_gunleri) + len(ucretsiz_gunleri) + kismi_kesinti
     )
     destek_gun = max(0.0, TESVIK_TABAN_GUN - toplam_kesinti)
 
     sonuc.update({
         'Rapor Gün': float(len(rapor_gunleri)),
         'Hafta Sonu Kesintisi': float(len(hafta_sonlari)),
-        'Yıllık İzin Kesintisi': float(len(izin_gunleri)),
+        'Yıllık İzin Kesintisi': float(yillik_kesinti),
         'Resmi Tatil Kesintisi': float(len(resmi_tatil_gunleri)),
         'Kısmi Rapor Kesintisi': kismi_kesinti,
+        'Ücretsiz İzin Kesintisi': float(len(ucretsiz_gunleri)),
         'Toplam Kesinti': float(toplam_kesinti),
         'Destek Gün': destek_gun,
         'Destek Saat': destek_gun * GUNLUK_SAAT,
+        'Uyarı': ' | '.join(uyarilar),
     })
     return sonuc
 
@@ -455,12 +783,13 @@ def hesapla(df, donem=None, tatiller=None):
         donem = donem_tespit(df)
     tatiller = set(RESMI_TATILLER if tatiller is None else tatiller)
 
-    # Girdideki tanınmayan kolonlar kimlik bilgisi kabul edilip çıktıya taşınır.
+    # Girdideki tanınmayan kolonlar bilgi kolonu kabul edilip çıktıya taşınır.
     ek_kolonlar = [k for k in df.columns if k not in KOLONLAR]
+    kimlik_ad = df.attrs.get('kimlik_ad', KIMLIK_KOLONU)
 
     sonuclar = [
-        hesapla_personel(satirlar, donem, tatiller, ek_kolonlar)
-        for _, satirlar in df.groupby('Çalışan Numarası', sort=True)
+        hesapla_personel(satirlar, donem, tatiller, ek_kolonlar, kimlik_ad)
+        for _, satirlar in df.groupby(KIMLIK_KOLONU, sort=True)
     ]
     return pd.DataFrame(sonuclar)
 

@@ -47,10 +47,13 @@ Name: "masaustu"; Description: "Masaüstüne kısayol oluştur"; GroupDescriptio
 [Files]
 Source: "dist\{#CalisanExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "KULLANIM.txt";       DestDir: "{app}"; Flags: ignoreversion
+; Kural dosyasi: kullanici duzenlemis olabilir, guncellemede uzerine yazma.
+Source: "dist\ayarlar.json";  DestDir: "{app}"; Flags: onlyifdoesntexist uninsneveruninstall
 
 [Icons]
 Name: "{group}\{#Uygulama}";           Filename: "{app}\{#CalisanExe}"
 Name: "{group}\Kullanım Kılavuzu";     Filename: "{app}\KULLANIM.txt"
+Name: "{group}\Kuralları Düzenle";     Filename: "notepad.exe"; Parameters: """{app}\ayarlar.json"""
 Name: "{group}\{#Uygulama} Kaldır";    Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#Uygulama}";     Filename: "{app}\{#CalisanExe}"; Tasks: masaustu
 

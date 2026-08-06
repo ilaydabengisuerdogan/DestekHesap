@@ -22,6 +22,10 @@ __pycache__/
 venv/
 env/
 
+# --- Kural dosyası ---------------------------------------------------------
+# Gömülü varsayılanlardan üretilir ve kurulumla dağıtılır; kullanıcı düzenler.
+ayarlar.json
+
 # --- Yerel çalışma klasörleri ----------------------------------------------
 # GitHub'dan indirilip açılmış eski sürüm kopyası
 DestekHesap-main/

@@ -20,6 +20,9 @@ BETIK = KOK / 'kurulum.iss'
 EXE = KOK / 'dist' / 'TeknoparkDestekHesaplama.exe'
 KURULUM = KOK / 'dist' / 'TeknoparkDestekHesaplama_Kurulum.exe'
 
+# .exe bunlardan biri değiştiğinde yeniden paketlenmelidir.
+KAYNAKLAR = ['hesaplama.py', 'masaustu.py', 'paketle.py']
+
 ISCC_ADAYLARI = [
     Path(r'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'),
     Path(r'C:\Program Files\Inno Setup 6\ISCC.exe'),
@@ -36,14 +39,33 @@ def iscc_bul():
     )
 
 
+def exe_guncel_mi():
+    """Paketlenmiş .exe, kaynak dosyalardan daha yeni mi?"""
+    if not EXE.exists():
+        return False
+    exe_zamani = EXE.stat().st_mtime
+    return all((KOK / ad).stat().st_mtime <= exe_zamani
+               for ad in KAYNAKLAR if (KOK / ad).exists())
+
+
 def main():
     iscc = iscc_bul()
 
-    if not EXE.exists():
-        print("Uygulama henüz paketlenmemiş, önce paketleniyor...\n")
+    if not exe_guncel_mi():
+        neden = "henüz paketlenmemiş" if not EXE.exists() else "kaynak kod değişmiş"
+        print(f"Uygulama {neden}, önce paketleniyor...\n")
         subprocess.run([sys.executable, str(KOK / 'paketle.py')], check=True, cwd=KOK)
         if not EXE.exists():
             sys.exit("Paketleme başarısız: .exe oluşmadı.")
+    else:
+        print("Paketlenmiş .exe güncel, doğrudan kurulum dosyası üretiliyor.\n")
+
+    # Kural dosyası gömülü varsayılanlardan üretilip kurulumla birlikte gider;
+    # böylece kurallar yeniden derlemeden düzenlenebilir.
+    sys.path.insert(0, str(KOK))
+    import hesaplama
+    hesaplama.ayarlari_disa_aktar(KOK / 'dist' / 'ayarlar.json')
+    print("Kural dosyası üretildi: dist/ayarlar.json\n")
 
     KURULUM.unlink(missing_ok=True)
 

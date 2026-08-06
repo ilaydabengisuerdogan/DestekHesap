@@ -48,6 +48,126 @@ VARSAYILAN_GENISLIK = 150
 SOLA_YASLI = {'Şirket', 'Rapor Türü'}
 
 
+YOK = "— (kolon yok) —"
+
+# Eşleştirme ekranında kolonların ne işe yaradığını anlatan açıklamalar.
+KOLON_ACIKLAMALARI = {
+    hesaplama.KIMLIK_KOLONU: "Personeli tanımlayan kolon — çalışan numarası veya ad soyad",
+    'Şirket': "Personelin bağlı olduğu şirket",
+    'İzin Türü': "Yıllık İzin / Mazeret İzni / Ücretsiz İzin / Şirket Dışında Olma Nedeni",
+    'İzin Nedeni': "Alt kırılım — rapor tespiti buradan yapılır",
+    'İzin Başlangıç Tarihi': "İznin ilk günü",
+    'İzin Bitiş Tarihi': "İznin son günü",
+    'quantityInDays': "İzin gün sayısı",
+    'quantityInHours': "İzin saat sayısı",
+    hesaplama.ISE_BASLAMA_KOLONU: "Kıdem hesabı için — yoksa kıdem şartı uygulanmaz",
+}
+
+
+class KolonEslestirme(tk.Toplevel):
+    """
+    Dosyadaki kolonları programın beklediği alanlara eşleştirme penceresi.
+
+    Dosya yapısı değiştiğinde kod değiştirmeden uyarlama yapılabilsin diye var.
+    Kapatılırsa `sonuc` None kalır; onaylanırsa {dosya_basligi: beklenen} döner.
+    """
+
+    def __init__(self, ana, basliklar, mevcut_eslesme, hedefler, tumu=False):
+        super().__init__(ana)
+        self.sonuc = None
+        self.title("Kolon Eşleştirme")
+        self.configure(bg=ZEMIN)
+        self.resizable(False, False)
+        self.transient(ana)
+
+        # Hangi alanlar gösterilecek: yalnızca eksikler ya da tamamı.
+        gosterilecek = list(hesaplama.KOLONLAR) if tumu else list(hedefler)
+        if tumu and hesaplama.ISE_BASLAMA_KOLONU not in gosterilecek:
+            gosterilecek.append(hesaplama.ISE_BASLAMA_KOLONU)
+
+        # beklenen -> dosyadaki başlık (ters çevrilmiş eşleşme)
+        ters = {v: k for k, v in mevcut_eslesme.items()}
+
+        dis = ttk.Frame(self, padding=18)
+        dis.pack(fill='both', expand=True)
+
+        ttk.Label(dis, text="Kolon Eşleştirme", style='Baslik2.TLabel').pack(anchor='w')
+        aciklama = ("Dosyadaki kolonlar otomatik tanınamadı. Aşağıdan hangi kolonun "
+                    "ne olduğunu seçin." if not tumu else
+                    "Program kolonları otomatik tanıdı. Yanlış eşleşen varsa düzeltebilirsiniz.")
+        ttk.Label(dis, text=aciklama, style='AltBaslik.TLabel',
+                  wraplength=560).pack(anchor='w', pady=(2, 14))
+
+        izgara = ttk.Frame(dis)
+        izgara.pack(fill='x')
+        ttk.Label(izgara, text="PROGRAMIN BEKLEDİĞİ", style='Kucuk.TLabel').grid(
+            row=0, column=0, sticky='w', pady=(0, 6))
+        ttk.Label(izgara, text="DOSYADAKİ KOLON", style='Kucuk.TLabel').grid(
+            row=0, column=1, sticky='w', padx=(14, 0), pady=(0, 6))
+
+        secenekler = [YOK] + [str(b) for b in basliklar]
+        self.secimler = {}
+        for i, hedef in enumerate(gosterilecek, start=1):
+            zorunlu = hedef in hesaplama.KOLONLAR
+            etiket = hedef + (" *" if zorunlu else "  (isteğe bağlı)")
+            ttk.Label(izgara, text=etiket).grid(row=i, column=0, sticky='w', pady=3)
+
+            degisken = tk.StringVar(value=str(ters.get(hedef, YOK)))
+            ttk.Combobox(izgara, values=secenekler, textvariable=degisken,
+                         state='readonly', width=34).grid(
+                row=i, column=1, sticky='we', padx=(14, 0), pady=3)
+            self.secimler[hedef] = degisken
+
+            ipucu = KOLON_ACIKLAMALARI.get(hedef, "")
+            if ipucu:
+                ttk.Label(izgara, text=ipucu, style='Kucuk.TLabel').grid(
+                    row=i, column=2, sticky='w', padx=(12, 0), pady=3)
+
+        ttk.Label(dis, text="* işaretli alanlar zorunludur.",
+                  style='AltBaslik.TLabel').pack(anchor='w', pady=(14, 0))
+
+        dugmeler = ttk.Frame(dis)
+        dugmeler.pack(fill='x', pady=(14, 0))
+        ttk.Button(dugmeler, text="Tamam", style='Mavi.TButton',
+                   command=self._onayla).pack(side='right')
+        ttk.Button(dugmeler, text="Vazgeç", command=self.destroy).pack(
+            side='right', padx=(0, 8))
+
+        self.bind('<Escape>', lambda e: self.destroy())
+        self.update_idletasks()
+        x = ana.winfo_rootx() + (ana.winfo_width() - self.winfo_width()) // 2
+        y = ana.winfo_rooty() + 80
+        self.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+        self.grab_set()
+        ana.wait_window(self)
+
+    def _onayla(self):
+        eslesme, kullanilan = {}, {}
+        for hedef, degisken in self.secimler.items():
+            secim = degisken.get()
+            if secim == YOK:
+                continue
+            if secim in kullanilan:
+                messagebox.showwarning(
+                    "Aynı kolon iki kez seçildi",
+                    f"'{secim}' hem {kullanilan[secim]} hem {hedef} olarak seçilmiş.\n\n"
+                    "Her kolon yalnızca bir alana atanabilir.", parent=self)
+                return
+            kullanilan[secim] = hedef
+            eslesme[secim] = hedef
+
+        eksik = [k for k in hesaplama.KOLONLAR if k not in eslesme.values()]
+        if eksik:
+            messagebox.showwarning(
+                "Zorunlu alan seçilmedi",
+                "Şu zorunlu alanlar için kolon seçilmedi:\n\n  "
+                + "\n  ".join(eksik), parent=self)
+            return
+
+        self.sonuc = eslesme
+        self.destroy()
+
+
 class Uygulama(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -59,6 +179,7 @@ class Uygulama(tk.Tk):
         self.dosya_yolu = None
         self.veri = None
         self.sonuc = None
+        self.elle_eslesme = None
         self._kuyruk = queue.Queue()
 
         self._stil_kur()
@@ -80,7 +201,9 @@ class Uygulama(tk.Tk):
                        font=('Segoe UI', 10, 'bold'))
         stil.configure('TCheckbutton', background=ZEMIN)
         stil.configure('Baslik.TLabel', font=('Segoe UI', 20, 'bold'), foreground=LACIVERT)
+        stil.configure('Baslik2.TLabel', font=('Segoe UI', 13, 'bold'), foreground=LACIVERT)
         stil.configure('AltBaslik.TLabel', font=('Segoe UI', 10), foreground=GRI)
+        stil.configure('Kucuk.TLabel', font=('Segoe UI', 8), foreground=GRI)
         stil.configure('Dosya.TLabel', font=('Segoe UI', 10, 'bold'), foreground=LACIVERT)
         stil.configure('Metrik.TLabel', font=('Segoe UI', 17, 'bold'), foreground=LACIVERT)
         stil.configure('MetrikBaslik.TLabel', font=('Segoe UI', 9), foreground=GRI)
@@ -108,6 +231,10 @@ class Uygulama(tk.Tk):
         kutu1.pack(fill='x')
         ttk.Button(kutu1, text="📂  Dosya Seç...", style='Mavi.TButton',
                    command=self.dosya_sec).pack(side='left')
+        self.eslestir_dugmesi = ttk.Button(
+            kutu1, text="Kolonları Eşleştir...", command=self.eslestirmeyi_duzenle,
+            state='disabled')
+        self.eslestir_dugmesi.pack(side='left', padx=(10, 0))
         self.dosya_etiketi = ttk.Label(kutu1, text="Henüz dosya seçilmedi.", style='AltBaslik.TLabel')
         self.dosya_etiketi.pack(side='left', padx=14)
 
@@ -170,6 +297,11 @@ class Uygulama(tk.Tk):
         self.uyari_etiketi = ttk.Label(dis, text="", style='Uyari.TLabel', wraplength=1100)
         self.uyari_etiketi.pack(anchor='w', pady=(8, 0))
 
+        # Kural dosyası bozuksa sessizce varsayılana dönmek yerine haber ver.
+        if hesaplama.ayar_uyarisi:
+            ttk.Label(dis, text="⚠ " + hesaplama.ayar_uyarisi, style='Uyari.TLabel',
+                      wraplength=1100).pack(anchor='w', pady=(4, 0))
+
         # --- Sonuç tablosu
         kutu4 = ttk.LabelFrame(dis, text=" Hesaplama Sonuçları ", padding=10)
         kutu4.pack(fill='both', expand=True, pady=(12, 0))
@@ -208,29 +340,82 @@ class Uygulama(tk.Tk):
         )
         if not yol:
             return
+        self._dosyayi_yukle(yol)
+
+    def _dosyayi_yukle(self, yol, elle_eslesme=None):
+        """
+        Dosyayı okur. Tanınmayan kolon varsa eşleştirme ekranını açar,
+        böylece dosya yapısı değiştiğinde program hata verip durmaz.
+        """
         try:
-            self.veri = hesaplama.oku(yol)
+            basliklar, otomatik, eksik = hesaplama.kolonlari_incele(yol)
         except hesaplama.GirdiHatasi as hata:
-            self.veri = None
-            self.dosya_yolu = None
-            self.dosya_etiketi.config(text="Dosya okunamadı.")
-            self.hesapla_dugmesi.config(state='disabled')
-            messagebox.showerror("Dosya okunamadı", str(hata))
+            self._okuma_basarisiz(str(hata))
+            return
+        except Exception:
+            self._beklenmeyen_hata()
+            return
+
+        if eksik and elle_eslesme is None:
+            elle_eslesme = KolonEslestirme(self, basliklar, otomatik, eksik).sonuc
+            if elle_eslesme is None:
+                self._okuma_basarisiz(
+                    "Kolon eşleştirmesi tamamlanmadı, dosya okunmadı.", sessiz=True)
+                return
+
+        try:
+            self.veri = hesaplama.oku(yol, elle_eslesme)
+        except hesaplama.GirdiHatasi as hata:
+            self._okuma_basarisiz(str(hata))
             return
         except Exception:
             self._beklenmeyen_hata()
             return
 
         self.dosya_yolu = yol
+        self.elle_eslesme = elle_eslesme
         self.dosya_etiketi.config(text=os.path.basename(yol), style='Dosya.TLabel')
         self.hesapla_dugmesi.config(state='normal')
+        self.eslestir_dugmesi.config(state='normal')
         self._sonucu_temizle()
 
         yil, ay = hesaplama.donem_tespit(self.veri)
         self.yil_degeri.set(str(yil))
         self.ay_degeri.set(AYLAR[ay - 1])
         self.donem_degisti()
-        self.durum_etiketi.config(text=f"{len(self.veri)} izin kaydı okundu.")
+
+        kimlik = self.veri.attrs.get('kimlik_ad', hesaplama.KIMLIK_KOLONU)
+        self.durum_etiketi.config(
+            text=f"{len(self.veri)} izin kaydı okundu · kimlik: {kimlik}")
+
+    def eslestirmeyi_duzenle(self):
+        """Kolon eşleştirmesini kullanıcı istediği zaman gözden geçirebilsin."""
+        if not self.dosya_yolu:
+            return
+        try:
+            basliklar, otomatik, eksik = hesaplama.kolonlari_incele(self.dosya_yolu)
+        except Exception:
+            self._beklenmeyen_hata()
+            return
+        mevcut = dict(otomatik)
+        mevcut.update(self.elle_eslesme or {})
+        yeni = KolonEslestirme(self, basliklar, mevcut, hesaplama.KOLONLAR,
+                               tumu=True).sonuc
+        if yeni is not None:
+            self._dosyayi_yukle(self.dosya_yolu, yeni)
+
+    def _okuma_basarisiz(self, mesaj, sessiz=False):
+        self.veri = None
+        self.dosya_yolu = None
+        self.elle_eslesme = None
+        self.dosya_etiketi.config(text="Dosya okunmadı.", style='AltBaslik.TLabel')
+        self.hesapla_dugmesi.config(state='disabled')
+        self.eslestir_dugmesi.config(state='disabled')
+        self._sonucu_temizle()
+        if sessiz:
+            self.durum_etiketi.config(text=mesaj)
+        else:
+            messagebox.showerror("Dosya okunamadı", mesaj)
 
     def donem_degisti(self):
         """Dönem değişince tatil kutusunu o ayın varsayılan tatilleriyle doldur."""
@@ -317,11 +502,13 @@ class Uygulama(tk.Tk):
         if uyarililar.empty:
             self.uyari_etiketi.config(text="")
         else:
-            self.uyari_etiketi.config(
-                text=f"⚠ {len(uyarililar)} personelde izin gün sayısı ile resmi tatil takvimi "
-                     f"uyuşmuyor. Resmi tatil listesini kontrol edin; ayrıntı kaydedilen "
-                     f"Excel dosyasının 'Uyarı' kolonunda."
-            )
+            takvim = uyarililar['Uyarı'].str.contains('resmi tatil listesi').sum()
+            metin = f"⚠ {len(uyarililar)} personelde not var."
+            if takvim:
+                metin += (f" {takvim} tanesinde izin gün sayısı resmi tatil takvimiyle "
+                          f"uyuşmuyor — tatil listesini kontrol edin.")
+            metin += " Ayrıntı, kaydedilen Excel dosyasının 'Uyarı' kolonunda."
+            self.uyari_etiketi.config(text=metin)
         self.tabloyu_doldur()
 
     def _hesap_hatasi(self, iz):
@@ -433,9 +620,13 @@ def kendini_dogrula(girdi, cikti):
         # Arayüzdeki kaydetme akışının aynısı: iki dosya üretilir.
         ana_yol, kesintili_yol = hesaplama.excel_yaz_ikili(sonuc, cikti)
         raporlu = (sonuc['Rapor Durumu'] == 'Raporlu').sum()
+        ayar_yolu = hesaplama.ayar_dosyasi_yolu()
         ozet = (f"TAMAM\ndonem={donem[0]}-{donem[1]:02d}\npersonel={len(sonuc)}\n"
                 f"raporlu={raporlu}\ntoplam_destek_gun={sonuc['Destek Gün'].sum():g}\n"
                 f"kesintili_personel={len(hesaplama.kesintili_personel(sonuc))}\n"
+                f"ayar_dosyasi={'okundu' if ayar_yolu.exists() else 'yok'}\n"
+                f"ayar_uyarisi={hesaplama.ayar_uyarisi or '-'}\n"
+                f"tesvik_taban_gun={hesaplama.TESVIK_TABAN_GUN}\n"
                 f"ana_dosya={ana_yol}\nkesintili_dosya={kesintili_yol}\n")
     except Exception:
         with open(kayit, 'w', encoding='utf-8') as dosya:

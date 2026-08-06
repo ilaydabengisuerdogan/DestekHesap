@@ -63,12 +63,33 @@ Kurulum bitince program su iki yerden acilir:
   Excel dosyasini secin.
 
   Dosyada su bilgiler bulunmalidir:
-     Calisan Numarasi, Sirket, Izin Turu, Izin Nedeni,
+     Personel kimligi (Calisan Numarasi VEYA Ad Soyad),
+     Sirket, Izin Turu, Izin Nedeni,
      Izin Baslangic Tarihi, Izin Bitis Tarihi,
      quantityInDays, quantityInHours
 
-  Kolonlardan biri eksikse program hangisinin eksik
-  oldugunu ve dosyada hangi kolonlarin bulundugunu soyler.
+  Istege bagli: Ise Baslama Tarihi (kidem hesabi icin)
+
+
+  >> KOLON ESLESTIRME EKRANI
+
+  Bir kolon otomatik taninamazsa program HATA VERIP DURMAZ.
+  Kolon Eslestirme ekrani acilir ve size sorar:
+
+     PROGRAMIN BEKLEDIGI      DOSYADAKI KOLON
+     Personel *               [ Ad Soyad          v ]
+     Sirket *                 [ Sirket            v ]
+     Izin Turu *              [ Kategori          v ]
+     ...
+
+  Her satirda acilir listeden dogru kolonu secin ve
+  Tamam'a basin. Yildizli (*) alanlar zorunludur.
+
+  Eslestirmeyi sonradan da degistirebilirsiniz:
+  "Kolonlari Eslestir..." dugmesine basmaniz yeterli.
+
+  Bu sayede dosya yapisi degisse bile programin
+  guncellenmesine gerek kalmaz.
 
 
   >> KOLON YAPISI DEGISIRSE
@@ -163,15 +184,22 @@ Belirleyici kriter, personelin o ay icinde SAGLIK RAPORU
 (hastalik raporu veya kadin dogum istirahati) olup olmadigidir.
 
 
+  HER PERSONELDE DUSEN
+  ......................................................
+  UCRETSIZ IZIN - Bu gunlerde ucret odenmedigi ve SGK
+  primi yatmadigi icin tesvikten yararlanilamaz. Rapor
+  durumundan bagimsiz olarak duser.
+
+
   RAPORU OLMAYAN PERSONEL
   ......................................................
-  Yillik izin, resmi tatil ve mazeret izni tesvikten
-  DUSMEZ. Tam 30 gun destek alir.
+  Ucretsiz izin disinda hicbir izin dusmez. Yillik izin,
+  resmi tatil ve mazeret izni tesviki azaltmaz.
 
 
   RAPORU OLAN PERSONEL
   ......................................................
-  Haftalik calisma saatini tamamlayamadigi icin sunlar dusulur:
+  Haftalik calisma saatini tamamlayamadigi icin sunlar da dusulur:
 
     1. Rapor gunleri
        Rapor araligina dusen is gunleri.
@@ -192,7 +220,36 @@ Belirleyici kriter, personelin o ay icinde SAGLIK RAPORU
   DUSMEYEN IZINLER
   Mazeret Izni (doktor randevusu, dogum gunu izni, tasinma vb.)
   ve Evlilik Izni tesvikten DUSMEZ - personel raporlu olsa bile.
-  Yalnizca yillik izin ve resmi tatil duser.
+
+
+  KIDEM SARTI (Is Kanunu Madde 53)
+  Ise baslama tarihinden itibaren 1 yilini DOLDURMAMIS
+  personelin yillik izni, yasal olarak hak edilmemis
+  sayilir. Bu kayit, ayni donemde raporu olsa bile
+  tesvikten dusulmez, "Uyari" kolonunda belirtilir ve
+  "Riskli" kolonunda Evet olarak isaretlenir.
+
+     Kidem              Yillik izin hakki
+     0 - 1 yil          hak yok  (RISKLI)
+     1 - 5 yil          14 gun
+     5 - 15 yil         20 gun
+     15 yil ve uzeri    26 gun
+
+  Bu kural icin dosyada "Ise Baslama Tarihi" kolonu
+  bulunmalidir; yoksa kural uygulanmaz ve ilgili
+  kolonlar bos birakilir.
+
+
+  YILLIK IZINDE GUN SAYIMI
+  Yarim gunluk yillik izinler ay boyunca toplanip
+  YUKARI YUVARLANIR:
+
+     0,5 gun                     -> 1 tam gun
+     0,5 + 0,5 (iki ayri gunde)  -> 1 tam gun
+                                    (iki gun DEGIL)
+     Bir gunde 4 saat 30 dk ustu -> o gun tam gun
+
+  Bu yuvarlama yalnizca yillik izne uygulanir.
 
   AY SONU HAFTASI
   Hafta sonu yalnizca donem ayinin ICINE duserse sayilir. Ay sonu
@@ -246,9 +303,14 @@ Belirleyici kriter, personelin o ay icinde SAGLIK RAPORU
   4. CIKTI DOSYASINDAKI KOLONLAR
 ----------------------------------------------------------------
 
-  Calisan Numarasi              Personel numarasi
+  (kimlik kolonu)               Calisan Numarasi veya Ad Soyad
+                                - dosyadaki adiyla gorunur
   Sirket                        Bagli oldugu sirket
   Donem                         Hesaplanan ay (orn. 2026-07)
+  Kidem (Yil)                   Tamamlanmis kidem yili
+  Yillik Izin Hakki             Kideme gore hak (14/20/26)
+  Riskli                        1 yilini doldurmadan yillik
+                                izin kullanilmissa "Evet"
   Rapor Durumu                  Raporlu / Raporsuz
   Rapor Turu                    Hastalik Raporu vb.
   Rapor Gun                     Rapor nedeniyle dusen is gunu
@@ -256,17 +318,56 @@ Belirleyici kriter, personelin o ay icinde SAGLIK RAPORU
   Yillik Izin Kesintisi         Yillik izin nedeniyle dusen gun
   Resmi Tatil Kesintisi         Tatil nedeniyle dusen gun
   Kismi Rapor Kesintisi         Saatlik raporlardan dusen gun
+  Ucretsiz Izin Kesintisi       Ucretsiz izinden dusen gun
   Toplam Kesinti                Yukaridakilerin toplami
   Destek Gun                    30 - Toplam Kesinti
   Destek Saat                   Destek Gun x 8
-  Uyari                         Varsa tatil takvimi uyusmazligi
+  Uyari                         Tatil takvimi uyusmazligi veya
+                                kidem sarti notu
+
+  Dosyada Ise Baslama Tarihi, Departman gibi ek kolonlar
+  varsa bunlar da kimligin yaninda cikti dosyasina tasinir.
 
 Kesinti kalemleri ayri ayri gosterildigi icin, teknopark
 denetiminde hangi kesintinin nereden geldigi izlenebilir.
 
 
 ----------------------------------------------------------------
-  5. SIK KARSILASILAN DURUMLAR
+  5. KURALLARI DEGISTIRME (ayarlar.json)
+----------------------------------------------------------------
+
+Kolon adlari, izin turleri, resmi tatil takvimi ve tesvik
+taban gunu programin ICINE GOMULU DEGILDIR. Bunlar programin
+yanindaki "ayarlar.json" dosyasindan okunur.
+
+Boylece yeni bir tatil veya yeni bir kolon adi eklemek icin
+programin guncellenmesi GEREKMEZ.
+
+Acmak icin:
+   Baslat menusu > Teknopark Destek Hesaplama
+                 > Kurallari Duzenle
+
+Ornek icerik:
+
+   "resmi_tatiller": [
+     "01.01.2026",
+     "15.07.2026",
+     "29.10.2026"
+   ],
+   "tesvik_taban_gun": 30
+
+Duzenledikten sonra kaydedip programi yeniden baslatin.
+
+DIKKAT:
+   - Dosya bicimi bozulursa program calismayi surdurur ama
+     ekranda uyari gosterir ve gomulu varsayilanlari kullanir.
+   - Emin degilseniz once dosyanin bir kopyasini alin.
+   - Program guncellendiginde bu dosya KORUNUR, uzerine
+     yazilmaz.
+
+
+----------------------------------------------------------------
+  6. SIK KARSILASILAN DURUMLAR
 ----------------------------------------------------------------
 
   "Dosya okunamadi" hatasi

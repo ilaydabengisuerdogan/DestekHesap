@@ -8,6 +8,7 @@ Kural motoru testleri.
 
 import datetime as dt
 import glob
+import json
 import os
 
 import pandas as pd
@@ -21,10 +22,13 @@ TATILLER = {dt.date(2026, 7, 15)}  # 15 Temmuz, Çarşamba
 
 # ------------------------------------------------------------ yardımcılar
 
+KIMLIK = hesaplama.KIMLIK_KOLONU
+
+
 def satir(calisan, izin_turu, baslangic, bitis, gun, nedeni='', sirket='Test A.Ş.'):
     """Tek bir izin satırı üretir. Tarihler 'YYYY-MM-DD' string'i."""
     return {
-        'Çalışan Numarası': calisan,
+        KIMLIK: calisan,
         'Şirket': sirket,
         'İzin Türü': izin_turu,
         'İzin Nedeni': nedeni,
@@ -113,7 +117,7 @@ def test_gercek_veri_raporsuz_personel_tam_destek(gercek_sonuc):
 
 def test_gercek_veri_tatil_takvimi_tutarli(gercek_sonuc):
     """Varsayılan takvimle hiçbir satırda quantityInDays sapması olmamalı."""
-    assert (gercek_sonuc['Uyarı'] == '').all()
+    assert not gercek_sonuc['Uyarı'].str.contains('resmi tatil listesi').any()
 
 
 def test_gercek_veri_kirilim_toplami_tutarli(gercek_sonuc):
@@ -226,6 +230,248 @@ def test_tam_ay_rapor_destek_sifira_dusmez_negatife():
     assert sonuc['Destek Saat'] == 0
 
 
+# ------------------------------------------- ücretsiz izin ve kıdem şartı
+
+def test_ucretsiz_izin_raporsuz_personelde_de_duser():
+    """Ücret ödenmediği ve SGK primi yatmadığı için rapor aranmaz."""
+    sonuc = hesapla([satir(1, 'Ücretsiz İzin', '2026-07-27', '2026-07-31', 5,
+                           'Kişisel Nedenler')])
+    assert sonuc['Rapor Durumu'] == 'Raporsuz'
+    assert sonuc['Ücretsiz İzin Kesintisi'] == 5
+    assert sonuc['Destek Gün'] == 25
+
+
+def test_ucretsiz_izin_resmi_tatili_kapsamaz():
+    """13-24 Temmuz: 15 Temmuz tatil olduğu için 9 iş günü düşer."""
+    sonuc = hesapla([satir(1, 'Ücretsiz İzin', '2026-07-13', '2026-07-24', 9,
+                           'Kişisel Nedenler')])
+    assert sonuc['Ücretsiz İzin Kesintisi'] == 9
+    assert sonuc['Destek Gün'] == 21
+
+
+def test_ucretsiz_izin_raporla_birlikte_mukerrer_sayilmaz():
+    sonuc = hesapla([
+        rapor(1, '2026-07-09', '2026-07-10', 2),
+        satir(1, 'Ücretsiz İzin', '2026-07-09', '2026-07-10', 2, 'Kişisel Nedenler'),
+    ])
+    assert sonuc['Rapor Gün'] == 2
+    assert sonuc['Ücretsiz İzin Kesintisi'] == 0
+    # 2 rapor + 2 hafta sonu + 1 resmi tatil
+    assert sonuc['Toplam Kesinti'] == 5
+
+
+def _kidem_satiri(ise_baslama, **kw):
+    s = satir(1, 'Yıllık İzin', '2026-07-20', '2026-07-21', 2, **kw)
+    s[hesaplama.ISE_BASLAMA_KOLONU] = pd.Timestamp(ise_baslama)
+    return s
+
+
+def _kidem_rapor(ise_baslama):
+    s = rapor(1, '2026-07-09', '2026-07-09', 1)
+    s[hesaplama.ISE_BASLAMA_KOLONU] = pd.Timestamp(ise_baslama)
+    return s
+
+
+def test_bir_yildan_az_kidemde_yillik_izin_dusmez():
+    """İş Kanunu Md. 53: hak edilmemiş yıllık izin, raporlu olsa bile düşmez."""
+    sonuc = hesapla([_kidem_rapor('2026-03-02'), _kidem_satiri('2026-03-02')])
+    assert sonuc['Yıllık İzin Kesintisi'] == 0
+    assert 'kıdem' in sonuc['Uyarı']
+    # 1 rapor + 2 hafta sonu + 1 resmi tatil
+    assert sonuc['Toplam Kesinti'] == 4
+
+
+def test_bir_yili_dolduran_kidemde_yillik_izin_duser():
+    sonuc = hesapla([_kidem_rapor('2020-01-15'), _kidem_satiri('2020-01-15')])
+    assert sonuc['Yıllık İzin Kesintisi'] == 2
+    assert sonuc['Uyarı'] == ''
+    assert sonuc['Toplam Kesinti'] == 6
+
+
+@pytest.mark.parametrize('ise_baslama, beklenen', [
+    ('2025-07-21', False),   # yıldönümüne 1 gün var
+    ('2025-07-20', True),    # tam yıldönümü
+    ('2025-07-19', True),    # yıldönümü geçmiş
+    ('2026-01-01', False),
+    ('2024-01-01', True),
+    ('2024-02-29', True),    # artık gün: yıldönümü 28.02.2025 sayılır
+])
+def test_kidem_esigi(ise_baslama, beklenen):
+    assert hesaplama.kidem_yeterli_mi(
+        pd.Timestamp(ise_baslama), dt.date(2026, 7, 20)) is beklenen
+
+
+def test_kidem_artik_yil_sinirinda_dogru():
+    """29 Şubat'ta işe başlayanın yıldönümü, artık olmayan yılda 28 Şubat sayılır."""
+    assert hesaplama.kidem_yeterli_mi(pd.Timestamp('2024-02-29'), dt.date(2025, 2, 28))
+    assert not hesaplama.kidem_yeterli_mi(pd.Timestamp('2024-02-29'), dt.date(2025, 2, 27))
+
+
+def test_ise_baslama_yoksa_kidem_sarti_uygulanmaz():
+    """Bilgi yoksa kural uygulanmaz; yıllık izin normal şekilde düşer."""
+    sonuc = hesapla([
+        rapor(1, '2026-07-09', '2026-07-09', 1),
+        satir(1, 'Yıllık İzin', '2026-07-20', '2026-07-21', 2),
+    ])
+    assert sonuc['Yıllık İzin Kesintisi'] == 2
+    assert sonuc['Uyarı'] == ''
+
+
+# ------------------------------------- Kural 3: yıllık izinde gün sayımı
+
+@pytest.mark.parametrize('toplam, beklenen', [
+    (0, 0),
+    (0.5, 1),     # tek yarım gün -> 1 tam gün
+    (1.0, 1),     # 0,5 + 0,5 -> 1 tam gün (iki ayrı gün değil)
+    (1.5, 2),
+    (2.0, 2),
+    (3.5, 4),
+])
+def test_yillik_izin_yarim_gun_yuvarlamasi(toplam, beklenen):
+    assert hesaplama.yillik_izin_kismi_kesintisi(toplam) == beklenen
+
+
+def test_tek_yarim_gunluk_yillik_izin_tam_gun_sayilir():
+    sonuc = hesapla([
+        rapor(1, '2026-07-09', '2026-07-09', 1),
+        satir(1, 'Yıllık İzin', '2026-07-20', '2026-07-20', 0.5),
+    ])
+    assert sonuc['Yıllık İzin Kesintisi'] == 1
+
+
+def test_iki_ayri_yarim_gun_tek_tam_gun_sayilir():
+    """0,5 + 0,5 farklı günlerde kullanılsa da toplam 1 tam gündür."""
+    sonuc = hesapla([
+        rapor(1, '2026-07-09', '2026-07-09', 1),
+        satir(1, 'Yıllık İzin', '2026-07-20', '2026-07-20', 0.5),
+        satir(1, 'Yıllık İzin', '2026-07-22', '2026-07-22', 0.5),
+    ])
+    assert sonuc['Yıllık İzin Kesintisi'] == 1
+
+
+def test_yedi_yarim_gun_dort_tam_gun_sayilir():
+    """Gerçek veride 1170 numaralı personelde görülen desen."""
+    kayitlar = [rapor(1, '2026-07-09', '2026-07-09', 1)]
+    for gun in (6, 7, 8, 10, 13, 14, 16):
+        kayitlar.append(satir(1, 'Yıllık İzin', f'2026-07-{gun:02d}',
+                              f'2026-07-{gun:02d}', 0.5))
+    assert hesapla(kayitlar)['Yıllık İzin Kesintisi'] == 4
+
+
+def test_dort_bucuk_saat_ustu_yillik_izin_tam_gun():
+    """Eşiğin üzerindeki kısmi izin yarım değil tam gün sayılır."""
+    kayit = satir(1, 'Yıllık İzin', '2026-07-20', '2026-07-20', 0.625)  # 5 saat
+    sonuc = hesapla([rapor(1, '2026-07-09', '2026-07-09', 1), kayit])
+    assert sonuc['Yıllık İzin Kesintisi'] == 1
+
+    kayit2 = satir(1, 'Yıllık İzin', '2026-07-22', '2026-07-22', 0.5)   # 4 saat
+    sonuc2 = hesapla([rapor(1, '2026-07-09', '2026-07-09', 1), kayit, kayit2])
+    # 1,0 + 0,5 = 1,5 -> 2 tam gün
+    assert sonuc2['Yıllık İzin Kesintisi'] == 2
+
+
+def test_tam_ve_yarim_gunluk_yillik_izin_birlikte():
+    sonuc = hesapla([
+        rapor(1, '2026-07-09', '2026-07-09', 1),
+        satir(1, 'Yıllık İzin', '2026-07-20', '2026-07-21', 2),      # 2 tam gün
+        satir(1, 'Yıllık İzin', '2026-07-22', '2026-07-22', 0.5),    # + 1 gün
+    ])
+    assert sonuc['Yıllık İzin Kesintisi'] == 3
+
+
+# ------------------------------------- kıdem kademeleri ve riskli işareti
+
+@pytest.mark.parametrize('kidem, beklenen', [
+    (0, 0), (1, 14), (4, 14), (5, 20), (14, 20), (15, 26), (30, 26),
+])
+def test_yillik_izin_hakki_kademeleri(kidem, beklenen):
+    assert hesaplama.yillik_izin_hakki(kidem) == beklenen
+
+
+def test_kidem_yili_hesabi():
+    assert hesaplama.kidem_yili(pd.Timestamp('2020-07-15'), dt.date(2026, 7, 1)) == 5
+    assert hesaplama.kidem_yili(pd.Timestamp('2020-06-15'), dt.date(2026, 7, 1)) == 6
+    assert hesaplama.kidem_yili(None, dt.date(2026, 7, 1)) is None
+
+
+def test_kidemsiz_yillik_izin_riskli_isaretlenir():
+    """Raporsuz olsa bile İK'nın görmesi için işaretlenir."""
+    sonuc = hesapla([_kidem_satiri('2026-03-02')])
+    assert sonuc['Riskli'] == 'Evet'
+    assert sonuc['Kıdem (Yıl)'] == 0
+    assert sonuc['Yıllık İzin Hakkı'] == 0
+    assert sonuc['Destek Gün'] == 30      # raporsuz, kesinti yok
+
+
+def test_kidemli_personel_riskli_isaretlenmez():
+    sonuc = hesapla([_kidem_satiri('2015-07-01')])
+    assert sonuc['Riskli'] == ''
+    assert sonuc['Kıdem (Yıl)'] == 11
+    assert sonuc['Yıllık İzin Hakkı'] == 20
+
+
+def test_ise_baslama_yoksa_kidem_kolonlari_bos():
+    sonuc = hesapla([satir(1, 'Yıllık İzin', '2026-07-20', '2026-07-21', 2)])
+    assert sonuc['Kıdem (Yıl)'] == ''
+    assert sonuc['Yıllık İzin Hakkı'] == ''
+    assert sonuc['Riskli'] == ''
+
+
+# ------------------------------------------------------ ayar dosyası
+
+def test_ayarlar_disa_aktarilip_geri_yuklenebilir(tmp_path):
+    yol = tmp_path / 'ayarlar.json'
+    hesaplama.ayarlari_disa_aktar(yol)
+    assert yol.exists()
+
+    icerik = json.loads(yol.read_text(encoding='utf-8'))
+    assert 'kolon_esanlamlilari' in icerik
+    assert icerik['tesvik_taban_gun'] == 30
+
+    onceki = hesaplama.TESVIK_TABAN_GUN
+    try:
+        icerik['tesvik_taban_gun'] = 31
+        yol.write_text(json.dumps(icerik, ensure_ascii=False), encoding='utf-8')
+        assert hesaplama.ayarlari_yukle(yol) is True
+        assert hesaplama.TESVIK_TABAN_GUN == 31
+        assert hesaplama.ayar_uyarisi is None
+    finally:
+        hesaplama.TESVIK_TABAN_GUN = onceki
+
+
+def test_bom_ile_kaydedilmis_ayar_dosyasi_okunur(tmp_path):
+    """Not Defteri UTF-8 dosyayı BOM ile kaydedebilir; ayarlar yine geçerli olmalı."""
+    yol = tmp_path / 'ayarlar.json'
+    hesaplama.ayarlari_disa_aktar(yol)
+    icerik = json.loads(yol.read_text(encoding='utf-8'))
+    icerik['tesvik_taban_gun'] = 31
+    yol.write_text(json.dumps(icerik, ensure_ascii=False), encoding='utf-8-sig')
+
+    onceki = hesaplama.TESVIK_TABAN_GUN
+    try:
+        assert hesaplama.ayarlari_yukle(yol) is True
+        assert hesaplama.ayar_uyarisi is None
+        assert hesaplama.TESVIK_TABAN_GUN == 31
+    finally:
+        hesaplama.TESVIK_TABAN_GUN = onceki
+
+
+def test_bozuk_ayar_dosyasi_varsayilana_doner(tmp_path):
+    """Sessizce yanlış kuralla hesaplamak yerine uyarı bırakılmalı."""
+    yol = tmp_path / 'ayarlar.json'
+    yol.write_text('{ bozuk json', encoding='utf-8')
+    assert hesaplama.ayarlari_yukle(yol) is False
+    assert hesaplama.ayar_uyarisi and 'okunamadı' in hesaplama.ayar_uyarisi
+    assert hesaplama.TESVIK_TABAN_GUN == 30
+    hesaplama.ayar_uyarisi = None
+
+
+def test_ayar_dosyasi_yoksa_varsayilanlar_kullanilir(tmp_path):
+    assert hesaplama.ayarlari_yukle(tmp_path / 'olmayan.json') is False
+    assert hesaplama.ayar_uyarisi is None
+    assert hesaplama.TESVIK_TABAN_GUN == 30
+
+
 @pytest.mark.parametrize('saat, beklenen', [
     (0, 0.0),
     (1, 0.5),      # yarım günün altı -> yarım gün
@@ -279,10 +525,12 @@ def test_resmi_tatil_hafta_sonuna_denk_gelirse_sayilmaz():
 
 def test_eksik_kolon_anlamli_hata_verir(tmp_path):
     yol = tmp_path / 'bozuk.xlsx'
-    pd.DataFrame({'Ad Soyad': ['Test'], 'Tarih': ['2026-07-01']}).to_excel(yol, index=False)
+    pd.DataFrame({'Konu': ['Test'], 'Tarih': ['2026-07-01']}).to_excel(yol, index=False)
     with pytest.raises(hesaplama.GirdiHatasi) as hata:
         hesaplama.oku(yol)
-    assert 'Çalışan Numarası' in str(hata.value)
+    mesaj = str(hata.value)
+    assert 'İzin Türü' in mesaj              # eksik alanlar sayılır
+    assert 'Konu' in mesaj                   # dosyadakiler de gösterilir
 
 
 def test_bos_dosya_hata_verir(tmp_path):
@@ -358,14 +606,14 @@ def _yaz(tmp_path, kayitlar, ad='girdi.xlsx', ust_bloklar=0, kolon_adlari=None):
 def test_ek_kolonlar_ciktiya_tasinir(tmp_path):
     """Ad Soyad, Sicil No gibi sonradan eklenen kolonlar çıktıda yer almalı."""
     kayit = rapor(1, '2026-07-09', '2026-07-09', 1)
-    kayit.update({'Ad Soyad': 'Ayşe Yılmaz', 'Sicil No': 'S-4471', 'Departman': 'Ar-Ge'})
-    sonuc = hesaplama.hesapla(hesaplama.oku(_yaz(tmp_path, [kayit])), TEMMUZ, TATILLER)
+    kayit.update({'Sicil No': 'S-4471', 'Departman': 'Ar-Ge'})
+    yol = _yaz(tmp_path, [kayit], kolon_adlari={KIMLIK: 'Çalışan Numarası'})
+    sonuc = hesaplama.hesapla(hesaplama.oku(yol), TEMMUZ, TATILLER)
 
-    assert sonuc['Ad Soyad'].iloc[0] == 'Ayşe Yılmaz'
     assert sonuc['Sicil No'].iloc[0] == 'S-4471'
     assert sonuc['Departman'].iloc[0] == 'Ar-Ge'
-    # Kimlik kolonları çalışan numarasının hemen yanında olmalı.
-    assert list(sonuc.columns)[:4] == ['Çalışan Numarası', 'Ad Soyad', 'Sicil No', 'Departman']
+    # Bilgi kolonları kimliğin hemen yanında olmalı.
+    assert list(sonuc.columns)[:3] == ['Çalışan Numarası', 'Sicil No', 'Departman']
     assert sonuc['Destek Gün'].iloc[0] == 26
 
 
@@ -380,7 +628,7 @@ def test_ek_kolon_satirdan_satira_degisirse_hepsi_gosterilir(tmp_path):
 def test_esanlamli_kolon_adlari_taninir(tmp_path):
     """'Sicil No', 'Başlangıç Tarihi' gibi farklı adlandırmalar kabul edilmeli."""
     yol = _yaz(tmp_path, [rapor(1, '2026-07-09', '2026-07-09', 1)], kolon_adlari={
-        'Çalışan Numarası': 'Sicil No',
+        KIMLIK: 'Sicil No',
         'İzin Başlangıç Tarihi': 'Başlangıç Tarihi',
         'İzin Bitiş Tarihi': 'Bitiş Tarihi',
         'İzin Türü': 'İzin Tipi',
@@ -388,14 +636,56 @@ def test_esanlamli_kolon_adlari_taninir(tmp_path):
         'quantityInHours': 'Saat Sayısı',
     })
     sonuc = hesaplama.hesapla(hesaplama.oku(yol), TEMMUZ, TATILLER)
-    assert sonuc['Çalışan Numarası'].iloc[0] == 1
+    # Kimlik kolonu çıktıda dosyadaki adıyla yer alır.
+    assert sonuc.columns[0] == 'Sicil No'
+    assert sonuc['Sicil No'].iloc[0] == 1
     assert sonuc['Rapor Durumu'].iloc[0] == 'Raporlu'
+    assert sonuc['Destek Gün'].iloc[0] == 26
+
+
+def test_ad_soyad_kimlik_olarak_kabul_edilir(tmp_path):
+    """Dosyada çalışan numarası yoksa Ad Soyad kimlik olarak kullanılmalı."""
+    yol = _yaz(tmp_path, [rapor('Ayşe Yılmaz', '2026-07-09', '2026-07-09', 1)],
+               kolon_adlari={KIMLIK: 'Ad Soyad'})
+    veri = hesaplama.oku(yol)
+    assert veri.attrs['kimlik_ad'] == 'Ad Soyad'
+    sonuc = hesaplama.hesapla(veri, TEMMUZ, TATILLER)
+    assert sonuc.columns[0] == 'Ad Soyad'
+    assert sonuc['Ad Soyad'].iloc[0] == 'Ayşe Yılmaz'
+    assert sonuc['Destek Gün'].iloc[0] == 26
+
+
+def test_calisan_numarasi_ad_soyada_tercih_edilir(tmp_path):
+    """İkisi de varsa numara kimlik olur, ad soyad bilgi kolonu olarak taşınır."""
+    kayit = rapor(7, '2026-07-09', '2026-07-09', 1)
+    kayit['Ad Soyad'] = 'Ayşe Yılmaz'
+    yol = _yaz(tmp_path, [kayit], kolon_adlari={KIMLIK: 'Çalışan Numarası'})
+    sonuc = hesaplama.hesapla(hesaplama.oku(yol), TEMMUZ, TATILLER)
+    assert list(sonuc.columns)[:2] == ['Çalışan Numarası', 'Ad Soyad']
+    assert sonuc['Çalışan Numarası'].iloc[0] == 7
+
+
+def test_elle_eslestirme_taninmayan_kolonlari_cozer(tmp_path):
+    """Hiçbir kolon adı tanınmasa bile elle eşleştirmeyle hesap yapılabilmeli."""
+    yol = _yaz(tmp_path, [rapor('P-1', '2026-07-09', '2026-07-09', 1)], kolon_adlari={
+        KIMLIK: 'KOD', 'İzin Türü': 'Kategori', 'İzin Nedeni': 'Alt',
+        'İzin Başlangıç Tarihi': 'Bas', 'İzin Bitiş Tarihi': 'Bit',
+        'quantityInDays': 'Adet', 'quantityInHours': 'Sure', 'Şirket': 'Birim',
+    })
+    _, _, eksik = hesaplama.kolonlari_incele(yol)
+    assert set(eksik) == set(hesaplama.KOLONLAR)     # hiçbiri tanınmadı
+
+    elle = {'KOD': KIMLIK, 'Kategori': 'İzin Türü', 'Alt': 'İzin Nedeni',
+            'Bas': 'İzin Başlangıç Tarihi', 'Bit': 'İzin Bitiş Tarihi',
+            'Adet': 'quantityInDays', 'Sure': 'quantityInHours', 'Birim': 'Şirket'}
+    sonuc = hesaplama.hesapla(hesaplama.oku(yol, elle), TEMMUZ, TATILLER)
+    assert sonuc.columns[0] == 'KOD'
     assert sonuc['Destek Gün'].iloc[0] == 26
 
 
 def test_buyuk_kucuk_harf_ve_bosluk_farki_onemsiz(tmp_path):
     yol = _yaz(tmp_path, [rapor(1, '2026-07-09', '2026-07-09', 1)], kolon_adlari={
-        'Çalışan Numarası': '  ÇALIŞAN NUMARASI ',
+        KIMLIK: '  ÇALIŞAN NUMARASI ',
         'quantityInDays': 'QuantityInDays',
         'İzin Türü': 'izin türü',
     })
@@ -409,6 +699,28 @@ def test_baslik_ustunde_blok_varsa_bulunur(tmp_path):
     assert list(veri.columns)[:8] == hesaplama.KOLONLAR
     assert len(veri) == 1
     assert hesaplama.hesapla(veri, TEMMUZ, TATILLER)['Destek Gün'].iloc[0] == 26
+
+
+def test_veri_sayfasi_cok_sayfali_dosyada_bulunur(tmp_path):
+    """'Kurallar' gibi yardımcı sayfalar atlanıp veri sayfası seçilmeli."""
+    yol = tmp_path / 'coksayfa.xlsx'
+    veri_df = pd.DataFrame([rapor(1, '2026-07-09', '2026-07-09', 1)])
+    kurallar = pd.DataFrame({'Kural': ['Kural 1', 'Kural 2'],
+                             'Açıklama': ['Metin', 'Metin']})
+    with pd.ExcelWriter(yol, engine='openpyxl') as writer:
+        kurallar.to_excel(writer, index=False, sheet_name='Kurallar')
+        veri_df.to_excel(writer, index=False, sheet_name='İzin Raporu', startrow=2)
+
+    veri = hesaplama.oku(yol)
+    assert len(veri) == 1
+    assert hesaplama.hesapla(veri, TEMMUZ, TATILLER)['Destek Gün'].iloc[0] == 26
+
+
+def test_ise_baslama_tarihi_okunabilir_bicimde_tasinir(tmp_path):
+    kayit = rapor(1, '2026-07-09', '2026-07-09', 1)
+    kayit[hesaplama.ISE_BASLAMA_KOLONU] = pd.Timestamp('2020-01-15')
+    sonuc = hesaplama.hesapla(hesaplama.oku(_yaz(tmp_path, [kayit])), TEMMUZ, TATILLER)
+    assert sonuc[hesaplama.ISE_BASLAMA_KOLONU].iloc[0] == '15.01.2020'
 
 
 def test_gercek_dosya_ek_kolonsuz_calismaya_devam_eder(gercek_sonuc):
