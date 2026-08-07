@@ -49,7 +49,8 @@ SURE_KOLONLARI = ['quantityInDays', 'quantityInHours']
 
 # Zorunlu olmayan, bulunursa kurallarda kullanılan kolonlar.
 ISE_BASLAMA_KOLONU = 'İşe Başlama Tarihi'
-ISTEGE_BAGLI_KOLONLAR = SURE_KOLONLARI + [ISE_BASLAMA_KOLONU]
+CIKIS_KOLONU = 'İşten Çıkış Tarihi'
+ISTEGE_BAGLI_KOLONLAR = SURE_KOLONLARI + [ISE_BASLAMA_KOLONU, CIKIS_KOLONU]
 
 # Yalnızca İşe Başlama Tarihi varsa doldurulabilen çıktı kolonları.
 # Hiçbir personelde değer yoksa çıktıdan tamamen çıkarılır.
@@ -79,6 +80,9 @@ KOLON_ESANLAMLILARI = {
     ISE_BASLAMA_KOLONU: ['İzne Esas Tarihi', 'İşe Esas Tarihi', 'İşe Giriş Tarihi',
                          'İşe Başlangıç Tarihi', 'Giriş Tarihi',
                          'Start Of Employment', 'Hire Date'],
+    # Personel ay içinde işten ayrıldıysa teşvik tabanı o güne kadar sayılır.
+    CIKIS_KOLONU: ['Çıkış Tarihi', 'işten çıkış tarihi', 'Ayrılış Tarihi',
+                   'İşten Ayrılış Tarihi', 'Termination Date', 'End Of Employment'],
 }
 
 # --- Kural sabitleri ---
@@ -792,6 +796,48 @@ def _ek_kolon_degeri(satirlar, kolon):
     return ' / '.join(degerler)[:200]
 
 
+def calisma_araligi(donem, ise_baslama=None, cikis=None):
+    """
+    Personelin dönem içinde şirkette bulunduğu tarih aralığını döner.
+
+    İşe başlama ayın içindeyse aralık o günden, işten çıkış ayın içindeyse
+    o güne kadar sürer. Her ikisi de ay dışındaysa tüm ay döner.
+    Aralık hiç oluşmuyorsa (örn. çıkış aydan önce) None döner.
+    """
+    donem_ilk, donem_son = donem_sinirlari(donem)
+    baslangic, bitis = donem_ilk, donem_son
+
+    for tarih, ref in ((ise_baslama, 'giris'), (cikis, 'cikis')):
+        if tarih is None or pd.isna(tarih):
+            continue
+        if hasattr(tarih, 'date'):
+            tarih = tarih.date()
+        if ref == 'giris':
+            baslangic = max(baslangic, tarih)
+        else:
+            bitis = min(bitis, tarih)
+
+    return (baslangic, bitis) if baslangic <= bitis else None
+
+
+def tesvik_tabani(donem, ise_baslama=None, cikis=None):
+    """
+    Personelin bu dönemde kaç gün üzerinden teşvik alacağını döner.
+
+    Tam ay çalışan personelde taban sabit 30 gündür (SGK'nın yaklaşımı;
+    ayın 28 veya 31 gün olması sonucu değiştirmez). Ay içinde işe giren
+    veya işten çıkan personelde şirkette bulunduğu gün sayısı kullanılır.
+    """
+    aralik = calisma_araligi(donem, ise_baslama, cikis)
+    if aralik is None:
+        return 0
+    donem_ilk, donem_son = donem_sinirlari(donem)
+    if aralik == (donem_ilk, donem_son):
+        return TESVIK_TABAN_GUN                     # tam ay
+    gun = (aralik[1] - aralik[0]).days + 1          # her iki uç dahil
+    return min(TESVIK_TABAN_GUN, gun)
+
+
 def kidem_yeterli_mi(ise_baslama, izin_baslangic):
     """
     Yıllık ücretli izin hakkı için kıdem yeterli mi? (İş Kanunu Madde 53)
@@ -827,12 +873,22 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None):
     Ücretsiz izin her personelde düşer. Yıllık izin ve resmi tatil yalnızca
     raporlu personelde düşer; yıllık izinde ayrıca kıdem şartı aranır.
     """
-    donem_ilk, donem_son = donem_sinirlari(donem)
-    ise_baslama = None
-    if ISE_BASLAMA_KOLONU in satirlar.columns:
-        gecerli = satirlar[ISE_BASLAMA_KOLONU].dropna()
-        if not gecerli.empty:
-            ise_baslama = gecerli.iloc[0]
+    ay_ilk, ay_son = donem_sinirlari(donem)
+
+    def _ilk_deger(kolon):
+        if kolon not in satirlar.columns:
+            return None
+        gecerli = satirlar[kolon].dropna()
+        return gecerli.iloc[0] if not gecerli.empty else None
+
+    ise_baslama = _ilk_deger(ISE_BASLAMA_KOLONU)
+    cikis = _ilk_deger(CIKIS_KOLONU)
+
+    # Personel ay içinde işe girdiyse/çıktıysa hem teşvik tabanı hem de
+    # kesintilerin sayılacağı aralık şirkette bulunduğu güne göre daralır.
+    taban = tesvik_tabani(donem, ise_baslama, cikis)
+    aralik = calisma_araligi(donem, ise_baslama, cikis)
+    donem_ilk, donem_son = aralik if aralik else (ay_ilk, ay_ilk - dt.timedelta(days=1))
 
     uyarilar = []
     rapor_satirlari, diger_satirlar = [], []
@@ -875,11 +931,20 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None):
         'Resmi Tatil Kesintisi': 0.0,
         'Kısmi Rapor Kesintisi': 0.0,
         'Ücretsiz İzin Kesintisi': 0.0,
+        'Teşvik Tabanı': float(taban),
         'Toplam Kesinti': 0.0,
-        'Destek Gün': float(TESVIK_TABAN_GUN),
-        'Destek Saat': float(TESVIK_TABAN_GUN * GUNLUK_SAAT),
+        'Destek Gün': float(taban),
+        'Destek Saat': float(taban * GUNLUK_SAAT),
         'Uyarı': '',
     })
+
+    if taban < TESVIK_TABAN_GUN:
+        uyarilar.append(
+            f"Personel dönemin tamamında çalışmadığı için teşvik {taban} gün "
+            f"üzerinden hesaplandı ({donem_ilk:%d.%m}-{donem_son:%d.%m})"
+            if aralik else
+            f"Personel bu dönemde çalışmıyor, teşvik hesaplanmadı"
+        )
 
     # (0) Ücretsiz izin: ücret ödenmediği ve SGK primi yatmadığı için rapor
     # durumundan bağımsız olarak her personelde düşer.
@@ -894,7 +959,7 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None):
     if not rapor_satirlari:
         # Raporu olmayan personelde yıllık izin ve resmi tatil düşmez.
         toplam = float(len(ucretsiz_gunleri))
-        destek = max(0.0, TESVIK_TABAN_GUN - toplam)
+        destek = max(0.0, taban - toplam)
         sonuc.update({
             'Ücretsiz İzin Kesintisi': toplam,
             'Toplam Kesinti': toplam,
@@ -976,7 +1041,7 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None):
         len(rapor_gunleri) + len(hafta_sonlari) + yillik_kesinti
         + len(resmi_tatil_gunleri) + len(ucretsiz_gunleri) + kismi_kesinti
     )
-    destek_gun = max(0.0, TESVIK_TABAN_GUN - toplam_kesinti)
+    destek_gun = max(0.0, taban - toplam_kesinti)
 
     sonuc.update({
         'Rapor Gün': float(len(rapor_gunleri)),

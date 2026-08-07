@@ -317,6 +317,105 @@ def test_ise_baslama_yoksa_kidem_sarti_uygulanmaz():
     assert sonuc['Uyarı'] == ''
 
 
+# --------------------------- teşvik tabanı: ay içinde işe giriş / çıkış
+
+def _tarihli(kayit, ise=None, cikis=None):
+    if ise:
+        kayit[hesaplama.ISE_BASLAMA_KOLONU] = pd.Timestamp(ise)
+    if cikis:
+        kayit[hesaplama.CIKIS_KOLONU] = pd.Timestamp(cikis)
+    return kayit
+
+
+@pytest.mark.parametrize('ise, cikis, beklenen', [
+    (None, None, 30),                       # tam ay -> sabit 30 (31 gün değil)
+    (None, '2026-07-17', 17),                # 1-17 Temmuz
+    ('2026-07-10', None, 22),                # 10-31 Temmuz
+    ('2026-07-10', '2026-07-20', 11),        # 10-20 Temmuz
+    ('2020-01-01', '2030-01-01', 30),        # dönem dışı tarihler etkilemez
+    (None, '2026-06-30', 0),                 # dönemden önce ayrılmış
+    ('2026-08-01', None, 0),                 # dönemden sonra başlamış
+])
+def test_tesvik_tabani(ise, cikis, beklenen):
+    assert hesaplama.tesvik_tabani(
+        TEMMUZ,
+        pd.Timestamp(ise) if ise else None,
+        pd.Timestamp(cikis) if cikis else None,
+    ) == beklenen
+
+
+def test_subat_tam_ay_da_30_gun():
+    """Ayın gün sayısı 28 de olsa tam ay 30 sayılır (SGK yaklaşımı)."""
+    assert hesaplama.tesvik_tabani((2026, 2)) == 30
+
+
+def test_isten_cikis_ornegi_1002():
+    """
+    İK örneği: 17 Temmuz'da çıkan personel.
+    2 gün rapor (7-8) + 2 gün hafta sonu (11-12) + 2 gün yıllık izin (13-14)
+    + 1 gün resmi tatil (15) = 7 kesinti.  Destek = 17 - 7 = 10
+    """
+    sonuc = hesapla([
+        _tarihli(rapor(1002, '2026-07-07', '2026-07-08', 2),
+                 ise='2020-01-01', cikis='2026-07-17'),
+        _tarihli(satir(1002, 'Yıllık İzin', '2026-07-13', '2026-07-15', 3,
+                       'Ücretli Yıllık İzin'),
+                 ise='2020-01-01', cikis='2026-07-17'),
+    ])
+    assert sonuc['Teşvik Tabanı'] == 17
+    assert sonuc['Rapor Gün'] == 2
+    assert sonuc['Hafta Sonu Kesintisi'] == 2
+    assert sonuc['Yıllık İzin Kesintisi'] == 2      # 15 Temmuz resmi tatilde sayılır
+    assert sonuc['Resmi Tatil Kesintisi'] == 1
+    assert sonuc['Toplam Kesinti'] == 7
+    assert sonuc['Destek Gün'] == 10
+
+
+def test_cikis_tarihi_yoksa_taban_30():
+    """Aynı veri, çıkış tarihi olmadan: 30 - 7 = 23"""
+    sonuc = hesapla([
+        _tarihli(rapor(1002, '2026-07-07', '2026-07-08', 2), ise='2020-01-01'),
+        _tarihli(satir(1002, 'Yıllık İzin', '2026-07-13', '2026-07-15', 3,
+                       'Ücretli Yıllık İzin'), ise='2020-01-01'),
+    ])
+    assert sonuc['Teşvik Tabanı'] == 30
+    assert sonuc['Toplam Kesinti'] == 7
+    assert sonuc['Destek Gün'] == 23
+
+
+def test_cikis_sonrasi_gunler_kesintiye_girmez():
+    """Ayrıldıktan sonraki izin ve hafta sonları hesaba katılmamalı."""
+    sonuc = hesapla([
+        _tarihli(rapor(1, '2026-07-06', '2026-07-07', 2),
+                 ise='2020-01-01', cikis='2026-07-10'),
+        # Ayrılıştan sonraki yıllık izin kaydı
+        _tarihli(satir(1, 'Yıllık İzin', '2026-07-20', '2026-07-21', 2),
+                 ise='2020-01-01', cikis='2026-07-10'),
+    ])
+    assert sonuc['Teşvik Tabanı'] == 10
+    assert sonuc['Yıllık İzin Kesintisi'] == 0      # 20-21 Temmuz kapsam dışı
+    assert sonuc['Hafta Sonu Kesintisi'] == 0       # 11-12 Temmuz kapsam dışı
+    assert sonuc['Resmi Tatil Kesintisi'] == 0      # 15 Temmuz kapsam dışı
+    assert sonuc['Destek Gün'] == 8                 # 10 - 2 rapor
+
+
+def test_kismi_donemde_uyari_verilir():
+    sonuc = hesapla([
+        _tarihli(satir(1, 'Yıllık İzin', '2026-07-06', '2026-07-07', 2),
+                 cikis='2026-07-17'),
+    ])
+    assert '17 gün üzerinden' in sonuc['Uyarı']
+
+
+def test_donemde_hic_calismayan_personel():
+    sonuc = hesapla([
+        _tarihli(rapor(1, '2026-07-07', '2026-07-08', 2), cikis='2026-06-15'),
+    ])
+    assert sonuc['Teşvik Tabanı'] == 0
+    assert sonuc['Destek Gün'] == 0
+    assert 'çalışmıyor' in sonuc['Uyarı']
+
+
 # ------------------------------------- Kural 3: yıllık izinde gün sayımı
 
 @pytest.mark.parametrize('toplam, beklenen', [
@@ -858,10 +957,11 @@ def test_ik_sistem_ciktisi_formati_taninir(tmp_path):
     sonuc = hesaplama.hesapla(hesaplama.oku(yol), TEMMUZ, TATILLER)
     assert sonuc.columns[0] == 'Çalışan Sicil'
     assert sonuc['Destek Gün'].iloc[0] == 26
-    # 'İzne Esas Tarihi' işe başlama tarihi olarak tanınır
+    # 'İzne Esas Tarihi' ve 'Çıkış Tarihi' kendi rollerinde tanınır
     assert hesaplama.ISE_BASLAMA_KOLONU in sonuc.columns
+    assert hesaplama.CIKIS_KOLONU in sonuc.columns
     # Kalan tanınmayan kolonlar bilgi olarak taşınır
-    for kolon in ('SGK', 'Çıkış Tarihi', 'İzin Onay'):
+    for kolon in ('SGK', 'İzin Onay'):
         assert kolon in sonuc.columns
 
 

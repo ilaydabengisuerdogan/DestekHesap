@@ -10,8 +10,22 @@ geldiğini satır satır gösteren bir kural motoru var.
 
 ## Hesaplama kuralları
 
-Teşvik **30 gün** üzerinden hesaplanır. Belirleyici kriter, personelin o ay içinde
-**sağlık raporu** (hastalık raporu veya kadın doğum istirahati) olup olmadığıdır.
+Teşvik, personelin o ay şirkette bulunduğu gün sayısı üzerinden hesaplanır.
+Belirleyici kriter, personelin o ay içinde **sağlık raporu** (hastalık raporu veya
+kadın doğum istirahati) olup olmadığıdır.
+
+### Teşvik tabanı
+
+| Durum | Taban |
+|---|---:|
+| Tam ay çalışan | **30 gün** — ayın 28 veya 31 gün olması değiştirmez |
+| Ay içinde işten çıkan (örn. 17 Temmuz) | 17 gün |
+| Ay içinde işe giren (örn. 10 Temmuz) | 22 gün |
+| Hem giriş hem çıkış ay içinde (10–20 Temmuz) | 11 gün |
+
+Çalışılmayan günlere denk gelen izin, hafta sonu ve resmi tatiller de hesaba
+katılmaz. `İşten Çıkış Tarihi` veya `İşe Başlama Tarihi` kolonu yoksa taban 30 gündür.
+Taban 30'un altındaysa çıktının `Uyarı` kolonunda belirtilir.
 
 ### Her personelde düşen
 
@@ -72,9 +86,28 @@ farklı bir kural işler: ≤ 4 saat yarım gün, > 4 saat tam gün.
 haftasının hafta sonu 1–2 Ağustos olduğu için Temmuz hesabına girmez.
 
 ```
-Destek Gün  = max(0, 30 − toplam kesinti)
+Destek Gün  = max(0, teşvik tabanı − toplam kesinti)
 Destek Saat = Destek Gün × 8
 ```
+
+### Örnek — ay içinde işten çıkış
+
+17 Temmuz'da işten ayrılan, 7–8 Temmuz'da raporlu olan ve 13–15 Temmuz'da
+yıllık izin kullanan personel:
+
+| Kalem | Gün |
+|---|---:|
+| Rapor günleri (7–8 Tem) | 2 |
+| Rapor haftasının hafta sonu (11–12 Tem) | 2 |
+| Yıllık izin (13–14 Tem) | 2 |
+| Resmi tatil (15 Tem) | 1 |
+| **Toplam kesinti** | **7** |
+| Teşvik tabanı (1–17 Tem) | 17 |
+| **Destek günü** (17 − 7) | **10** |
+
+15 Temmuz hem yıllık izin aralığında hem resmi tatil; mükerrer sayılmaması için
+`Resmi Tatil Kesintisi` altında gösterilir, `Yıllık İzin Kesintisi` 2 olarak kalır.
+Toplam yine 3 gündür.
 
 ### Örnek
 

@@ -190,6 +190,23 @@ Belirleyici kriter, personelin o ay icinde SAGLIK RAPORU
 (hastalik raporu veya kadin dogum istirahati) olup olmadigidir.
 
 
+  TESVIK TABANI (kac gun uzerinden hesaplanir)
+  ......................................................
+  Tam ay calisan personel        30 gun
+  Ay icinde isten cikan          cikisa kadarki gun
+     (orn. 17 Temmuz'da cikan -> 17 gun)
+  Ay icinde ise giren            giristen sonraki gun
+     (orn. 10 Temmuz'da giren -> 22 gun)
+
+  Ayin 28 veya 31 gun olmasi tam ay tabanini degistirmez.
+  Calisilmayan gunlere denk gelen izin, hafta sonu ve
+  resmi tatiller de hesaba katilmaz.
+
+  Bunun icin dosyada "Cikis Tarihi" ve "Ise Baslama
+  Tarihi" kolonlari bulunmalidir; yoksa taban 30 gundur.
+  Taban 30'un altindaysa "Uyari" kolonunda belirtilir.
+
+
   HER PERSONELDE DUSEN
   ......................................................
   UCRETSIZ IZIN - Bu gunlerde ucret odenmedigi ve SGK
@@ -330,8 +347,10 @@ Belirleyici kriter, personelin o ay icinde SAGLIK RAPORU
   Resmi Tatil Kesintisi         Tatil nedeniyle dusen gun
   Kismi Rapor Kesintisi         Saatlik raporlardan dusen gun
   Ucretsiz Izin Kesintisi       Ucretsiz izinden dusen gun
+  Tesvik Tabani                 Kac gun uzerinden hesaplandi
+                                (tam ay 30, kismi ayda daha az)
   Toplam Kesinti                Yukaridakilerin toplami
-  Destek Gun                    30 - Toplam Kesinti
+  Destek Gun                    Tesvik Tabani - Toplam Kesinti
   Destek Saat                   Destek Gun x 8
   Uyari                         Tatil takvimi uyusmazligi veya
                                 kidem sarti notu
