@@ -565,6 +565,50 @@ def test_bom_ile_kaydedilmis_ayar_dosyasi_okunur(tmp_path):
         hesaplama.TESVIK_TABAN_GUN = onceki
 
 
+def test_eski_ayar_dosyasi_yeni_kolon_adlarini_gizlemez(tmp_path):
+    """
+    Eski bir ayar dosyası, programa sonradan eklenen kolon adlarını
+    görünmez kılmamalı; aksi halde güncelleme alan kullanıcı yeni dosya
+    biçimini okuyamaz. (Kurulumda gerçekten yaşandı.)
+    """
+    yol = tmp_path / 'ayarlar.json'
+    # 'Çalışan Sicil' ve 'Süre/Gün' tanımadan önceki hali
+    eski = {
+        'kolon_esanlamlilari': {
+            hesaplama.KIMLIK_KOLONU: ['Çalışan Numarası', 'Sicil No'],
+            'quantityInDays': ['Gün Sayısı'],
+        }
+    }
+    yol.write_text(json.dumps(eski, ensure_ascii=False), encoding='utf-8')
+
+    onceki = {k: list(v) for k, v in hesaplama.KOLON_ESANLAMLILARI.items()}
+    try:
+        assert hesaplama.ayarlari_yukle(yol) is True
+        # Gömülü yeni adlar korunmalı
+        assert 'Çalışan Sicil' in hesaplama.KOLON_ESANLAMLILARI[hesaplama.KIMLIK_KOLONU]
+        assert 'Süre/Gün' in hesaplama.KOLON_ESANLAMLILARI['quantityInDays']
+        # Ayar dosyasındakiler de kalmalı
+        assert 'Sicil No' in hesaplama.KOLON_ESANLAMLILARI[hesaplama.KIMLIK_KOLONU]
+        eslesme = hesaplama._kolonlari_esle(['Çalışan Sicil', 'Süre/Gün'])
+        assert eslesme['Çalışan Sicil'] == hesaplama.KIMLIK_KOLONU
+        assert eslesme['Süre/Gün'] == 'quantityInDays'
+    finally:
+        hesaplama.KOLON_ESANLAMLILARI = onceki
+
+
+def test_ayar_dosyasi_yeni_kolon_adi_ekleyebilir(tmp_path):
+    yol = tmp_path / 'ayarlar.json'
+    yol.write_text(json.dumps(
+        {'kolon_esanlamlilari': {'Şirket': ['İşyeri']}}, ensure_ascii=False),
+        encoding='utf-8')
+    onceki = {k: list(v) for k, v in hesaplama.KOLON_ESANLAMLILARI.items()}
+    try:
+        hesaplama.ayarlari_yukle(yol)
+        assert hesaplama._kolonlari_esle(['İşyeri'])['İşyeri'] == 'Şirket'
+    finally:
+        hesaplama.KOLON_ESANLAMLILARI = onceki
+
+
 def test_bozuk_ayar_dosyasi_varsayilana_doner(tmp_path):
     """Sessizce yanlış kuralla hesaplamak yerine uyarı bırakılmalı."""
     yol = tmp_path / 'ayarlar.json'

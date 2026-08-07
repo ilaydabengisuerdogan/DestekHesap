@@ -305,6 +305,23 @@ def ayar_dosyasi_yolu():
     return kok / AYAR_DOSYASI
 
 
+def _esanlamlilari_birlestir(gomulu, dosyadan):
+    """
+    Gömülü kolon eşanlamlılarıyla ayar dosyasındakileri birleştirir.
+
+    Gömülü liste önce gelir (öncelik sırası korunur), ardından ayar
+    dosyasındaki fazladan adlar eklenir. Böylece kullanıcı yeni ad
+    tanımlayabilir ama programa sonradan eklenen adları kaybetmez.
+    """
+    birlesik = {ad: list(liste) for ad, liste in gomulu.items()}
+    for ad, liste in (dosyadan or {}).items():
+        mevcut = birlesik.setdefault(ad, [])
+        for esanlamli in liste:
+            if esanlamli not in mevcut:
+                mevcut.append(esanlamli)
+    return birlesik
+
+
 def ayarlari_yukle(yol=None):
     """
     Varsa ayar dosyasını okuyup modül sabitlerinin üzerine yazar.
@@ -337,6 +354,11 @@ def ayarlari_yukle(yol=None):
             deger = set(deger)
         elif degisken == 'YILLIK_IZIN_HAK_KADEMELERI':
             deger = [tuple(k) for k in deger]
+        elif degisken == 'KOLON_ESANLAMLILARI':
+            # Kolon tanıma listesi EZİLMEZ, birleştirilir. Aksi halde eski bir
+            # ayar dosyası, programa sonradan eklenen kolon adlarını görünmez
+            # kılar ve dosya tanınmıyormuş gibi davranır.
+            deger = _esanlamlilari_birlestir(KOLON_ESANLAMLILARI, deger)
         globals()[degisken] = deger
 
     # Diyanet takviminden teyit edilmiş dini bayram tarihleri.
