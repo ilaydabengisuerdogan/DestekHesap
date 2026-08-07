@@ -49,24 +49,33 @@ KOLONLAR = [
 ISE_BASLAMA_KOLONU = 'İşe Başlama Tarihi'
 ISTEGE_BAGLI_KOLONLAR = [ISE_BASLAMA_KOLONU]
 
+# Yalnızca İşe Başlama Tarihi varsa doldurulabilen çıktı kolonları.
+# Hiçbir personelde değer yoksa çıktıdan tamamen çıkarılır.
+KIDEM_KOLONLARI = ['Kıdem (Yıl)', 'Yıllık İzin Hakkı', 'Riskli']
+
 # Kolon adı farklılıklarına tolerans. Birebir eşleşme bulunamazsa bu adlar
 # denenir; büyük/küçük harf, Türkçe karakter ve noktalama farkları önemsizdir.
 # Kimlik için önce numara alanları, bulunamazsa ad soyad alanları denenir.
 KOLON_ESANLAMLILARI = {
-    KIMLIK_KOLONU: ['Çalışan Numarası', 'Sicil No', 'Sicil Numarası', 'Personel No',
+    KIMLIK_KOLONU: ['Çalışan Numarası', 'Çalışan Sicil', 'Çalışan Sicil No', 'Sicil',
+                    'Sicil No', 'Sicil Numarası', 'Personel No', 'Personel Sicil',
                     'Personel Numarası', 'Çalışan No', 'Employee Id', 'Employee Number',
                     'TC', 'TC Kimlik No',
                     'Ad Soyad', 'Adı Soyadı', 'Ad ve Soyad', 'İsim', 'Personel Adı',
                     'Çalışan Adı', 'Ad-Soyad', 'Full Name', 'Employee Name'],
     'Şirket': ['Firma', 'Şirket Adı', 'Company'],
     'İzin Türü': ['İzin Tipi', 'Devamsızlık Tipi', 'Leave Type'],
-    'İzin Nedeni': ['İzin Sebebi', 'Neden', 'Açıklama', 'Leave Reason'],
+    'İzin Nedeni': ['İzin Neden', 'İzin Sebebi', 'Neden', 'Açıklama', 'Leave Reason'],
     'İzin Başlangıç Tarihi': ['Başlangıç Tarihi', 'Başlangıç', 'İlk Gün', 'Start Date'],
     'İzin Bitiş Tarihi': ['Bitiş Tarihi', 'Bitiş', 'Son Gün', 'End Date'],
-    'quantityInDays': ['Gün', 'Gün Sayısı', 'İzin Gün Sayısı', 'Days'],
-    'quantityInHours': ['Saat', 'Saat Sayısı', 'İzin Saat Sayısı', 'Hours'],
-    ISE_BASLAMA_KOLONU: ['İşe Giriş Tarihi', 'İşe Başlangıç Tarihi', 'Giriş Tarihi',
-                         'Start Of Employment', 'Hire Date'],
+    'quantityInDays': ['Süre/Gün', 'Süre Gün', 'Gün', 'Gün Sayısı',
+                       'İzin Gün Sayısı', 'Days'],
+    'quantityInHours': ['Süre/Saat', 'Süre Saat', 'Saat', 'Saat Sayısı',
+                        'İzin Saat Sayısı', 'Hours'],
+    # 'İzne Esas Tarihi': İK sisteminin çıktısında işe başlama tarihini taşıyor
+    # (personel başına sabit, kıdem hesabının dayanağı). İK ile teyit edildi.
+    ISE_BASLAMA_KOLONU: ['İzne Esas Tarihi', 'İşe Giriş Tarihi', 'İşe Başlangıç Tarihi',
+                         'Giriş Tarihi', 'Start Of Employment', 'Hire Date'],
 }
 
 # --- Kural sabitleri ---
@@ -944,7 +953,17 @@ def hesapla(df, donem=None, tatiller=None):
         hesapla_personel(satirlar, donem, tatiller, ek_kolonlar, kimlik_ad)
         for _, satirlar in df.groupby(KIMLIK_KOLONU, sort=True)
     ]
-    return pd.DataFrame(sonuclar)
+    sonuc_df = pd.DataFrame(sonuclar)
+
+    # Kıdeme bağlı kolonlar yalnızca İşe Başlama Tarihi varsa anlamlıdır.
+    # Hiçbir personelde kıdem bilgisi yoksa üçü birlikte kaldırılır; kıdem
+    # biliniyorsa boş 'Riskli' de anlamlıdır ("riskli kayıt yok") ve kalır.
+    kidem_kolonu = KIDEM_KOLONLARI[0]
+    if kidem_kolonu in sonuc_df.columns and (sonuc_df[kidem_kolonu] == '').all():
+        sonuc_df = sonuc_df.drop(columns=[k for k in KIDEM_KOLONLARI
+                                          if k in sonuc_df.columns])
+
+    return sonuc_df
 
 
 def kesintili_personel(sonuc_df):

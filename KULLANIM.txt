@@ -100,12 +100,18 @@ Kurulum bitince program su iki yerden acilir:
       ("IZIN TURU", "izin türü", " Izin Turu " ayni sayilir).
 
     - Yaygin farkli adlandirmalar taninir:
-        Calisan Numarasi  <- Sicil No, Personel No, TC
+        Personel kimligi  <- Calisan Numarasi, Calisan Sicil,
+                             Sicil No, Personel No, TC, Ad Soyad
         Izin Baslangic    <- Baslangic Tarihi, Baslangic
         Izin Bitis        <- Bitis Tarihi, Bitis
         Izin Turu         <- Izin Tipi
-        quantityInDays    <- Gun, Gun Sayisi
-        quantityInHours   <- Saat, Saat Sayisi
+        Izin Nedeni       <- Izin Neden, Izin Sebebi
+        quantityInDays    <- Sure/Gun, Gun, Gun Sayisi
+        quantityInHours   <- Sure/Saat, Saat, Saat Sayisi
+        Ise Baslama       <- Izne Esas Tarihi, Ise Giris Tarihi
+
+      Ik sisteminin iki farkli cikti bicimi de elle
+      eslestirme gerektirmeden okunur.
 
     - Baslik satiri ilk satirda olmak zorunda degildir.
       Ustte firma adi, donem bilgisi gibi bloklar varsa
@@ -311,6 +317,11 @@ Belirleyici kriter, personelin o ay icinde SAGLIK RAPORU
   Yillik Izin Hakki             Kideme gore hak (14/20/26)
   Riskli                        1 yilini doldurmadan yillik
                                 izin kullanilmissa "Evet"
+
+     NOT: Yukaridaki uc kolon yalnizca dosyada
+     "Ise Baslama Tarihi" varsa gorunur. Yoksa
+     hic gosterilmez, tabloyu kalabaliklastirmaz.
+
   Rapor Durumu                  Raporlu / Raporsuz
   Rapor Turu                    Hastalik Raporu vb.
   Rapor Gun                     Rapor nedeniyle dusen is gunu

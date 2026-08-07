@@ -410,11 +410,33 @@ def test_kidemli_personel_riskli_isaretlenmez():
     assert sonuc['Yıllık İzin Hakkı'] == 20
 
 
-def test_ise_baslama_yoksa_kidem_kolonlari_bos():
-    sonuc = hesapla([satir(1, 'Yıllık İzin', '2026-07-20', '2026-07-21', 2)])
-    assert sonuc['Kıdem (Yıl)'] == ''
-    assert sonuc['Yıllık İzin Hakkı'] == ''
-    assert sonuc['Riskli'] == ''
+def test_ise_baslama_yoksa_kidem_kolonlari_hic_gorunmez():
+    """Boş kolonlar çıktıyı kalabalıklaştırmasın diye tamamen kaldırılır."""
+    sonuc = hesaplama.hesapla(
+        pd.DataFrame([satir(1, 'Yıllık İzin', '2026-07-20', '2026-07-21', 2)]),
+        TEMMUZ, TATILLER,
+    )
+    for kolon in hesaplama.KIDEM_KOLONLARI:
+        assert kolon not in sonuc.columns
+
+
+def test_ise_baslama_varsa_kidem_kolonlari_gorunur():
+    sonuc = hesaplama.hesapla(
+        pd.DataFrame([_kidem_satiri('2015-07-01')]), TEMMUZ, TATILLER)
+    for kolon in hesaplama.KIDEM_KOLONLARI:
+        assert kolon in sonuc.columns
+    assert sonuc['Kıdem (Yıl)'].iloc[0] == 11
+
+
+def test_kidem_kolonlari_kismen_doluysa_korunur():
+    """Bir personelde bile bilgi varsa kolonlar kalmalı."""
+    kayitlar = [
+        _kidem_satiri('2015-07-01'),
+        satir(2, 'Yıllık İzin', '2026-07-20', '2026-07-21', 2),
+    ]
+    sonuc = hesaplama.hesapla(pd.DataFrame(kayitlar), TEMMUZ, TATILLER)
+    assert 'Kıdem (Yıl)' in sonuc.columns
+    assert sorted(sonuc['Kıdem (Yıl)'].astype(str)) == ['', '11']
 
 
 # ---------------------------------------------- çok yıllı resmi tatil takvimi
@@ -768,6 +790,67 @@ def test_elle_eslestirme_taninmayan_kolonlari_cozer(tmp_path):
     sonuc = hesaplama.hesapla(hesaplama.oku(yol, elle), TEMMUZ, TATILLER)
     assert sonuc.columns[0] == 'KOD'
     assert sonuc['Destek Gün'].iloc[0] == 26
+
+
+def test_ik_sistem_ciktisi_formati_taninir(tmp_path):
+    """
+    İK'nın ikinci format çıktısı elle eşleştirme gerektirmemeli.
+
+    Kolonlar: Çalışan Sicil, SGK, Şirket, İzin Tipi, İzin Neden,
+    İzne Esas Tarihi, Çıkış Tarihi, İzin Başlangıç/Bitiş Tarihi,
+    Süre/Gün, Süre/Saat, İzin Onay
+    """
+    kayit = rapor(1, '2026-07-09', '2026-07-09', 1)
+    kayit.update({'SGK': 'Gebze Bilişim Vadisi', 'İzne Esas Tarihi': pd.Timestamp('2024-07-08'),
+                  'Çıkış Tarihi': None, 'İzin Onay': 'APPROVED'})
+    yol = _yaz(tmp_path, [kayit], kolon_adlari={
+        KIMLIK: 'Çalışan Sicil', 'İzin Türü': 'İzin Tipi', 'İzin Nedeni': 'İzin Neden',
+        'quantityInDays': 'Süre/Gün', 'quantityInHours': 'Süre/Saat',
+    })
+
+    _, _, eksik = hesaplama.kolonlari_incele(yol)
+    assert eksik == [], f"elle eşleştirme gerekti: {eksik}"
+
+    sonuc = hesaplama.hesapla(hesaplama.oku(yol), TEMMUZ, TATILLER)
+    assert sonuc.columns[0] == 'Çalışan Sicil'
+    assert sonuc['Destek Gün'].iloc[0] == 26
+    # 'İzne Esas Tarihi' işe başlama tarihi olarak tanınır
+    assert hesaplama.ISE_BASLAMA_KOLONU in sonuc.columns
+    # Kalan tanınmayan kolonlar bilgi olarak taşınır
+    for kolon in ('SGK', 'Çıkış Tarihi', 'İzin Onay'):
+        assert kolon in sonuc.columns
+
+
+@pytest.mark.parametrize('baslik, beklenen', [
+    ('Çalışan Sicil', hesaplama.KIMLIK_KOLONU),
+    ('Sicil', hesaplama.KIMLIK_KOLONU),
+    ('Personel Sicil', hesaplama.KIMLIK_KOLONU),
+    ('Süre/Gün', 'quantityInDays'),
+    ('Süre/Saat', 'quantityInHours'),
+    ('İzin Tipi', 'İzin Türü'),
+    ('İzin Neden', 'İzin Nedeni'),
+    ('İzne Esas Tarihi', hesaplama.ISE_BASLAMA_KOLONU),
+])
+def test_yeni_format_kolon_adlari_eslesir(baslik, beklenen):
+    assert hesaplama._kolonlari_esle([baslik]).get(baslik) == beklenen
+
+
+def test_izne_esas_tarihi_kidem_hesabinda_kullanilir(tmp_path):
+    """İK teyidi: 'İzne Esas Tarihi' işe başlama tarihini taşıyor."""
+    kayitlar = [
+        rapor(2, '2026-07-21', '2026-07-22', 2),
+        satir(2, 'Yıllık İzin', '2026-07-10', '2026-07-10', 1, 'Ücretli Yıllık İzin'),
+    ]
+    for k in kayitlar:                      # 1 yılını doldurmamış personel
+        k['İzne Esas Tarihi'] = pd.Timestamp('2025-08-18')
+    yol = _yaz(tmp_path, kayitlar, kolon_adlari={KIMLIK: 'Çalışan Sicil'})
+
+    sonuc = hesaplama.hesapla(hesaplama.oku(yol), TEMMUZ, TATILLER)
+    assert sonuc['Kıdem (Yıl)'].iloc[0] == 0
+    assert sonuc['Riskli'].iloc[0] == 'Evet'
+    # Kıdem şartı dolmadığı için yıllık izin düşmez
+    assert sonuc['Yıllık İzin Kesintisi'].iloc[0] == 0
+    assert 'kıdem' in sonuc['Uyarı'].iloc[0]
 
 
 def test_buyuk_kucuk_harf_ve_bosluk_farki_onemsiz(tmp_path):

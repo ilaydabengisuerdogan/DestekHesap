@@ -47,7 +47,8 @@ teşvikten **düşülmez**, çıktının `Uyarı` kolonunda belirtilir ve `Riskl
 kolonunda işaretlenir.
 
 Kıdem, gün sayısıyla değil takvim yıldönümüyle hesaplanır. `İşe Başlama Tarihi`
-kolonu dosyada yoksa kural uygulanmaz ve ilgili kolonlar boş bırakılır.
+kolonu dosyada yoksa kural uygulanmaz ve `Kıdem (Yıl)`, `Yıllık İzin Hakkı`,
+`Riskli` kolonları çıktıda **hiç görünmez**. Kolon geldiğinde kendiliğinden geri gelir.
 
 | Kıdem | Yıllık izin hakkı |
 |---|---:|
@@ -160,16 +161,21 @@ Gereken sekiz bilgi ve tanınan adlandırmalar:
 
 | Gereken | Tanınan adlar |
 |---|---|
-| Personel kimliği | Çalışan Numarası, Sicil No, Personel No, TC, **Ad Soyad**, İsim, Employee Id |
+| Personel kimliği | Çalışan Numarası, **Çalışan Sicil**, Sicil, Sicil No, Personel No, TC, **Ad Soyad**, İsim, Employee Id |
 | `Şirket` | Firma, Şirket Adı, Company |
-| `İzin Türü` | İzin Tipi, Devamsızlık Tipi, Leave Type |
-| `İzin Nedeni` | İzin Sebebi, Neden, Açıklama |
+| `İzin Türü` | **İzin Tipi**, Devamsızlık Tipi, Leave Type |
+| `İzin Nedeni` | **İzin Neden**, İzin Sebebi, Neden, Açıklama |
 | `İzin Başlangıç Tarihi` | Başlangıç Tarihi, Başlangıç, İlk Gün |
 | `İzin Bitiş Tarihi` | Bitiş Tarihi, Bitiş, Son Gün |
-| `quantityInDays` | Gün, Gün Sayısı, İzin Gün Sayısı |
-| `quantityInHours` | Saat, Saat Sayısı, İzin Saat Sayısı |
+| `quantityInDays` | **Süre/Gün**, Gün, Gün Sayısı, İzin Gün Sayısı |
+| `quantityInHours` | **Süre/Saat**, Saat, Saat Sayısı, İzin Saat Sayısı |
 
-İsteğe bağlı: `İşe Başlama Tarihi` (İşe Giriş Tarihi, Hire Date) — kıdem şartı için.
+İsteğe bağlı: `İşe Başlama Tarihi` — kıdem şartı için. **İzne Esas Tarihi**,
+İşe Giriş Tarihi, Hire Date adlarıyla da tanınır.
+
+Bu sayede İK sisteminin iki farklı çıktı biçimi de elle eşleştirme gerektirmeden
+okunur. Tanınmayan diğer kolonlar (`SGK`, `Çıkış Tarihi`, `İzin Onay` gibi) bilgi
+olarak çıktıya taşınır, hesaba girmez.
 
 Personel kimliği olarak **çalışan numarası da ad soyad da** kabul edilir. İkisi birden
 varsa numara kimlik olur, ad soyad bilgi kolonu olarak taşınır. Kimlik kolonu çıktıda
