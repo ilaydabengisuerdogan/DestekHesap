@@ -865,8 +865,84 @@ def test_ik_sistem_ciktisi_formati_taninir(tmp_path):
         assert kolon in sonuc.columns
 
 
+def _sure_kolonsuz(kayit):
+    """Süre kolonlarını kaldırır (İK'nın doğruluk testi dosyası gibi)."""
+    return {k: v for k, v in kayit.items() if k not in hesaplama.SURE_KOLONLARI}
+
+
+def test_sure_kolonlari_yoksa_tarihlerden_hesaplanir(tmp_path):
+    """
+    İK, süreleri bizim hesaplamamızı istiyor; dosyada Süre/Gün ve Süre/Saat yok.
+    Program eşleştirme ekranı açmadan tarihlerden üretmeli.
+    """
+    kayitlar = [
+        _sure_kolonsuz(rapor(1, '2026-07-08', '2026-07-09', 2)),
+        _sure_kolonsuz(satir(2, 'Yıllık İzin', '2026-07-06', '2026-07-10', 5)),
+        # 13-17 Temmuz: 15'i resmi tatil, 4 iş günü olmalı
+        _sure_kolonsuz(satir(3, 'Yıllık İzin', '2026-07-13', '2026-07-17', 4)),
+    ]
+    yol = _yaz(tmp_path, kayitlar)
+
+    _, _, eksik = hesaplama.kolonlari_incele(yol)
+    assert eksik == [], f"elle eşleştirme gerekti: {eksik}"
+
+    veri = hesaplama.oku(yol)
+    assert veri.attrs['sure_hesaplanacak'] == hesaplama.SURE_KOLONLARI
+
+    uretilen = hesaplama.sureleri_hesapla(veri, TATILLER)
+    assert list(uretilen['quantityInDays']) == [2, 5, 4]
+    assert list(uretilen['quantityInHours']) == [16, 40, 32]
+
+
+def test_hesaplanan_sureler_dosyadakiyle_ayni_sonucu_verir(tmp_path):
+    """Süre kolonlu ve kolonsuz aynı veri, aynı destek gününü vermeli."""
+    kayitlar = [
+        rapor(1, '2026-07-08', '2026-07-09', 2),
+        satir(1, 'Yıllık İzin', '2026-07-20', '2026-07-21', 2),
+    ]
+    ile = hesaplama.hesapla(hesaplama.oku(_yaz(tmp_path, kayitlar, 'ile.xlsx')),
+                            TEMMUZ, TATILLER)
+    siz = hesaplama.hesapla(
+        hesaplama.oku(_yaz(tmp_path, [_sure_kolonsuz(k) for k in kayitlar],
+                           'siz.xlsx')),
+        TEMMUZ, TATILLER)
+
+    assert ile['Destek Gün'].iloc[0] == siz['Destek Gün'].iloc[0]
+    assert ile.attrs.get('sure_hesaplandi') is False
+    assert siz.attrs.get('sure_hesaplandi') is True
+
+
+def test_sure_kolonu_varsa_hesaplanmaz(tmp_path):
+    """Dosyadaki değerler kendi hesabımızla ezilmemeli."""
+    # 5 günlük aralığa bilerek 3 gün yazılmış
+    kayit = satir(1, 'Yıllık İzin', '2026-07-06', '2026-07-10', 3)
+    veri = hesaplama.oku(_yaz(tmp_path, [kayit]))
+    assert veri.attrs['sure_hesaplanacak'] == []
+    assert hesaplama.sureleri_hesapla(veri, TATILLER)['quantityInDays'].iloc[0] == 3
+
+
+def test_sure_kolonsuz_dosyada_yarim_gun_ayirt_edilemez(tmp_path):
+    """
+    Bilinen sınır: tarihlerden yarım gün anlaşılamaz, tam gün sayılır.
+    Yıllık izinde yarım gün zaten tam güne yuvarlandığı için sonuç değişmez.
+    """
+    kayitlar = [
+        rapor(1, '2026-07-09', '2026-07-09', 1),
+        satir(1, 'Yıllık İzin', '2026-07-22', '2026-07-22', 0.5),
+    ]
+    ile = hesaplama.hesapla(hesaplama.oku(_yaz(tmp_path, kayitlar, 'a.xlsx')),
+                            TEMMUZ, TATILLER)
+    siz = hesaplama.hesapla(
+        hesaplama.oku(_yaz(tmp_path, [_sure_kolonsuz(k) for k in kayitlar], 'b.xlsx')),
+        TEMMUZ, TATILLER)
+    assert ile['Yıllık İzin Kesintisi'].iloc[0] == 1
+    assert siz['Yıllık İzin Kesintisi'].iloc[0] == 1
+
+
 @pytest.mark.parametrize('baslik, beklenen', [
     ('Çalışan Sicil', hesaplama.KIMLIK_KOLONU),
+    ('Çalışan Sicil No', hesaplama.KIMLIK_KOLONU),
+    ('İşe Esas Tarihi', hesaplama.ISE_BASLAMA_KOLONU),
     ('Sicil', hesaplama.KIMLIK_KOLONU),
     ('Personel Sicil', hesaplama.KIMLIK_KOLONU),
     ('Süre/Gün', 'quantityInDays'),
@@ -903,14 +979,14 @@ def test_buyuk_kucuk_harf_ve_bosluk_farki_onemsiz(tmp_path):
         'quantityInDays': 'QuantityInDays',
         'İzin Türü': 'izin türü',
     })
-    assert list(hesaplama.oku(yol).columns)[:8] == hesaplama.KOLONLAR
+    assert list(hesaplama.oku(yol).columns)[:6] == hesaplama.KOLONLAR
 
 
 def test_baslik_ustunde_blok_varsa_bulunur(tmp_path):
     """Başlık satırı ilk satırda değilse (üstte başlık bloğu varsa) bulunmalı."""
     yol = _yaz(tmp_path, [rapor(1, '2026-07-09', '2026-07-09', 1)], ust_bloklar=3)
     veri = hesaplama.oku(yol)
-    assert list(veri.columns)[:8] == hesaplama.KOLONLAR
+    assert list(veri.columns)[:6] == hesaplama.KOLONLAR
     assert len(veri) == 1
     assert hesaplama.hesapla(veri, TEMMUZ, TATILLER)['Destek Gün'].iloc[0] == 26
 

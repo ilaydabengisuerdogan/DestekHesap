@@ -503,6 +503,11 @@ class Uygulama(tk.Tk):
         self.metrikler["Toplam Destek Günü"].config(text=self._sayi(sonuc['Destek Gün'].sum()))
         self.metrikler["Toplam Kesinti"].config(text=self._sayi(sonuc['Toplam Kesinti'].sum()))
 
+        if sonuc.attrs.get('sure_hesaplandi'):
+            self.durum_etiketi.config(
+                text="Hesaplama tamamlandı · izin gün/saat süreleri dosyada "
+                     "olmadığı için tarihlerden hesaplandı")
+
         uyarililar = sonuc[sonuc['Uyarı'] != '']
         if uyarililar.empty:
             self.uyari_etiketi.config(text="")

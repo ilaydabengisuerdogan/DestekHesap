@@ -41,13 +41,15 @@ KOLONLAR = [
     'İzin Nedeni',
     'İzin Başlangıç Tarihi',
     'İzin Bitiş Tarihi',
-    'quantityInDays',
-    'quantityInHours',
 ]
+
+# Süre kolonları zorunlu değildir. Dosyada yoksa izin tarihlerinden hesaplanır:
+# aralıktaki hafta içi günler (resmi tatiller hariç) sayılır.
+SURE_KOLONLARI = ['quantityInDays', 'quantityInHours']
 
 # Zorunlu olmayan, bulunursa kurallarda kullanılan kolonlar.
 ISE_BASLAMA_KOLONU = 'İşe Başlama Tarihi'
-ISTEGE_BAGLI_KOLONLAR = [ISE_BASLAMA_KOLONU]
+ISTEGE_BAGLI_KOLONLAR = SURE_KOLONLARI + [ISE_BASLAMA_KOLONU]
 
 # Yalnızca İşe Başlama Tarihi varsa doldurulabilen çıktı kolonları.
 # Hiçbir personelde değer yoksa çıktıdan tamamen çıkarılır.
@@ -72,10 +74,11 @@ KOLON_ESANLAMLILARI = {
                        'İzin Gün Sayısı', 'Days'],
     'quantityInHours': ['Süre/Saat', 'Süre Saat', 'Saat', 'Saat Sayısı',
                         'İzin Saat Sayısı', 'Hours'],
-    # 'İzne Esas Tarihi': İK sisteminin çıktısında işe başlama tarihini taşıyor
+    # 'İzne/İşe Esas Tarihi': İK sisteminin çıktısında işe başlama tarihini taşıyor
     # (personel başına sabit, kıdem hesabının dayanağı). İK ile teyit edildi.
-    ISE_BASLAMA_KOLONU: ['İzne Esas Tarihi', 'İşe Giriş Tarihi', 'İşe Başlangıç Tarihi',
-                         'Giriş Tarihi', 'Start Of Employment', 'Hire Date'],
+    ISE_BASLAMA_KOLONU: ['İzne Esas Tarihi', 'İşe Esas Tarihi', 'İşe Giriş Tarihi',
+                         'İşe Başlangıç Tarihi', 'Giriş Tarihi',
+                         'Start Of Employment', 'Hire Date'],
 }
 
 # --- Kural sabitleri ---
@@ -683,8 +686,12 @@ def oku(kaynak, elle_eslesme=None):
     df['İzin Nedeni'] = df['İzin Nedeni'].fillna('').astype(str).str.strip()
     df['Şirket'] = df['Şirket'].fillna('').astype(str).str.strip()
 
-    for kolon in ('quantityInDays', 'quantityInHours'):
-        df[kolon] = pd.to_numeric(df[kolon], errors='coerce').fillna(0.0)
+    # Süre kolonları dosyada yoksa izin tarihlerinden hesaplanır (hesapla()
+    # içinde, yürürlükteki resmi tatil takvimiyle).
+    sure_hesaplanacak = [k for k in SURE_KOLONLARI if k not in df.columns]
+    for kolon in SURE_KOLONLARI:
+        if kolon in df.columns:
+            df[kolon] = pd.to_numeric(df[kolon], errors='coerce').fillna(0.0)
 
     # Kimliği ya da tarihi olmayan satırlar hesaba alınamaz.
     df = df.dropna(subset=[KIMLIK_KOLONU, 'İzin Başlangıç Tarihi', 'İzin Bitiş Tarihi'])
@@ -698,6 +705,36 @@ def oku(kaynak, elle_eslesme=None):
     df = df.drop_duplicates()
     df = df.reset_index(drop=True)
     df.attrs['kimlik_ad'] = kimlik_ozgun_ad or KIMLIK_KOLONU
+    df.attrs['sure_hesaplanacak'] = sure_hesaplanacak
+    return df
+
+
+def sureleri_hesapla(df, tatiller):
+    """
+    Süre kolonları dosyada yoksa izin tarihlerinden üretir.
+
+    Gün sayısı = aralıktaki hafta içi günler (resmi tatiller hariç),
+    saat = gün × günlük çalışma saati.
+
+    Not: Tarihlerden yarım gün ayırt edilemez; her kayıt tam gün sayılır.
+    Dosyada süre kolonu varsa bu fonksiyon hiçbir şey yapmaz.
+    """
+    eksik = df.attrs.get('sure_hesaplanacak') or []
+    if not eksik:
+        return df
+
+    df = df.copy()
+    gunler = df.apply(
+        lambda s: sum(1 for g in gun_araligi(s['İzin Başlangıç Tarihi'].date(),
+                                             s['İzin Bitiş Tarihi'].date())
+                      if is_gunu(g, tatiller)),
+        axis=1,
+    ).astype(float)
+
+    if 'quantityInDays' in eksik:
+        df['quantityInDays'] = gunler
+    if 'quantityInHours' in eksik:
+        df['quantityInHours'] = df['quantityInDays'] * GUNLUK_SAAT
     return df
 
 
@@ -967,9 +1004,14 @@ def hesapla(df, donem=None, tatiller=None):
         donem = donem_tespit(df)
     tatiller = set(RESMI_TATILLER if tatiller is None else tatiller)
 
-    # Girdideki tanınmayan kolonlar bilgi kolonu kabul edilip çıktıya taşınır.
-    ek_kolonlar = [k for k in df.columns if k not in KOLONLAR]
+    # Süre kolonları dosyada yoksa tarihlerden üretilir.
+    sure_hesaplandi = bool(df.attrs.get('sure_hesaplanacak'))
     kimlik_ad = df.attrs.get('kimlik_ad', KIMLIK_KOLONU)
+    df = sureleri_hesapla(df, tatiller)
+
+    # Girdideki tanınmayan kolonlar bilgi kolonu kabul edilip çıktıya taşınır.
+    ek_kolonlar = [k for k in df.columns
+                   if k not in KOLONLAR and k not in SURE_KOLONLARI]
 
     sonuclar = [
         hesapla_personel(satirlar, donem, tatiller, ek_kolonlar, kimlik_ad)
@@ -985,6 +1027,7 @@ def hesapla(df, donem=None, tatiller=None):
         sonuc_df = sonuc_df.drop(columns=[k for k in KIDEM_KOLONLARI
                                           if k in sonuc_df.columns])
 
+    sonuc_df.attrs['sure_hesaplandi'] = sure_hesaplandi
     return sonuc_df
 
 
