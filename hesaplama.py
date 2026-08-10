@@ -931,8 +931,9 @@ def tutarlilik_uyarisi(satir, tatiller, yarim_tatiller=None):
     )
     if araliktaki_arifeler and hesaplanan - gun_sayisi == 0.5 * len(araliktaki_arifeler):
         tarihler = ", ".join(f"{g:%d.%m.%Y}" for g in araliktaki_arifeler)
-        return (mesaj + f". Fark {tarihler} arife günlerinden geliyor: biz yarım gün "
-                        f"sayıyoruz, dosyayı üreten sistem tam gün saymış")
+        return (mesaj + f". BEKLENEN FARK: {tarihler} arife günleri kural gereği "
+                        f"yarım gün sayılır, dosyayı üreten sistem tam gün saymış. "
+                        f"İşlem yapmanız gerekmez")
 
     return mesaj + " (resmi tatil listesi kontrol edilmeli)"
 

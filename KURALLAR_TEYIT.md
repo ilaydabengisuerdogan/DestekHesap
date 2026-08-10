@@ -172,16 +172,18 @@ Aşağıdakiler teşvikten düşer:
 | # | Kural | Kaynak | Durum |
 |---|---|---|---|
 | I1 | Dini bayramlar da resmi tatil sayılır | İK (sözlü bilgilendirme) | Teyitli |
-| I2 | Arife günleri **tam gün** tatil sayılır | VERİ | Teyitli |
+| I2 | Arife günleri **yarım gün** sayılır | İK talimatı | **Teyitli** |
 | I3 | Hafta sonuna denk gelen resmi tatil ayrıca sayılmaz | VARSAYIM | Teyit gerekiyor |
 
-> **I2 dayanağı:** Temmuz dosyasındaki bir kayıt 31 Aralık'a uzanıyordu ve İK
-> sisteminin gün sayısı ancak **28 Ekim arifesi tam gün** sayılırsa tutuyordu.
-> Bu, tahmin değil veriden çıkarılmış bir bulgu. Aynı kabul Ramazan ve Kurban
-> arifeleri için de uygulandı.
+> **I2 — kapandı.** Ramazan, Kurban ve 28 Ekim arifeleri yarım gün sayılır.
+> O güne denk gelen rapor veya izin 0,5 gün kaybettirir; çalışılmışsa resmi
+> tatil kesintisi 0,5 gündür.
 >
-> **Sorulacak soru:** Arife günleri gerçekten tam gün mü sayılıyor, yoksa yarım gün mü?
-> Yarım günse sistemde tatil yapısının değişmesi gerekir.
+> **Bilinen fark:** İK'nın izin raporunu üreten sistem arifeyi **tam gün**
+> sayıyor. Bu, 1043 numaralı personelin 16.07–31.12 kaydında görülüyor:
+> dosyada 119 gün yazıyor, bizim hesabımız 119,5. Fark tam olarak 28 Ekim'den
+> geliyor ve **beklenen bir farktır** — çıktının `Uyarı` kolonunda böyle
+> belirtilir, işlem gerektirmez.
 
 ### Takvim nasıl üretiliyor
 
@@ -234,7 +236,7 @@ var, ama 2026 dışındakilerin dini bayram tarihleri hesaplanmıştır.
 |---|---|---|
 | 1 | Raporlu personelde yıllık izin düşüyor mu? (D3) | 5 personel, toplam 15 gün |
 | 2 | Ücretsiz izinde hafta sonları da düşmeli mi? (H2) | Ücretsiz izinli her personel |
-| 3 | Arife günleri tam gün mü, yarım gün mü? (I2) | Mart, Mayıs, Ekim dönemleri |
+| ~~3~~ | ~~Arife günleri tam gün mü, yarım gün mü?~~ **Kapandı: yarım gün** | — |
 | 4 | Hesaplanan dini bayram tarihleri Diyanet'le uyuşuyor mu? (I) | 2027 ve sonrası |
 | 5 | `Destek Saat = Gün × 8` doğru mu? (A2) | Tüm çıktı |
 | 6 | Ay sonu haftasının hafta sonu kaybolması kabul edilebilir mi? (E3) | Ay sonunda raporu biten personel |
