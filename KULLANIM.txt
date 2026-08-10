@@ -98,6 +98,9 @@ Kurulum bitince program su iki yerden acilir:
 
     - Buyuk/kucuk harf ve bosluk farki onemli degildir
       ("IZIN TURU", "izin türü", " Izin Turu " ayni sayilir).
+      Bu, kolon adlari icin de HUCRE ICERIKLERI icin de
+      gecerlidir: "YILLIK IZIN", "Yıllık İzin" ve
+      "yillik izin" ayni izin turu sayilir.
 
     - Yaygin farkli adlandirmalar taninir:
         Personel kimligi  <- Calisan Numarasi, Calisan Sicil,
@@ -235,6 +238,10 @@ Belirleyici kriter, personelin o ay icinde SAGLIK RAPORU
 
     4. Resmi tatiller
        O ay icindeki hafta icine denk gelen resmi tatiller.
+
+       ARIFE GUNLERI YARIM GUN sayilir: Ramazan ve Kurban
+       arifeleri ile 28 Ekim. O gune denk gelen rapor veya
+       izin de yarim gun kaybettirir.
 
     5. Kismi (saatlik) rapor
        Saatler ay boyunca toplanir. Artan kisim yarim gunu
@@ -376,6 +383,22 @@ programin guncellenmesi GEREKMEZ.
 Acmak icin:
    Baslat menusu > Teknopark Destek Hesaplama
                  > Kurallari Duzenle
+
+  >> BAYRAM TARIHLERI DUGMESI  (en kolay yol)
+
+  Donem satirindaki "Bayram Tarihleri..." dugmesine basin.
+  Acilan pencerede yil secip Ramazan ve Kurban Bayrami'nin
+  1. GUNUNU girin:
+
+     Yil: [2027]        (hesaplandi, dogrulanmadi)
+     Ramazan Bayrami 1. gunu  [11.03.2027]
+     Kurban  Bayrami 1. gunu  [18.05.2027]
+
+  Kaydet'e basin. Arife (yarim gun) ve kalan bayram
+  gunleri otomatik eklenir; o yil icin uyari kalkar.
+
+  Bos biraktiginiz bayram hesaplanmaya devam eder.
+
 
   >> RESMI TATILLER VE DINI BAYRAMLAR
 

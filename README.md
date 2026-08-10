@@ -230,8 +230,12 @@ Bir kolon otomatik tanınamazsa program hata verip durmaz: **kolon eşleştirme 
 açılır ve hangi kolonun ne olduğu açılır listelerden seçilir. Böylece dosya yapısı
 tamamen değişse bile kod değiştirmeden uyarlama yapılabilir.
 
-Eşleştirme, `Kolonları Eşleştir...` düğmesiyle sonradan da gözden geçirilebilir —
-otomatik tanıma yanlış eşleştirmişse düzeltilebilir.
+### Bayram tarihleri
+
+`Bayram Tarihleri...` düğmesi, Ramazan ve Kurban Bayramı'nın 1. gününü yıl bazında
+elle girmeyi sağlar. Girilen yıl "doğrulanmış" sayılır, hesaplama bırakılır ve
+uyarı kalkar. Arife (yarım gün) ve kalan bayram günleri otomatik eklenir.
+Tarihler `ayarlar.json` dosyasına yazılır.
 
 ### Kural dosyası (`ayarlar.json`)
 
@@ -313,6 +317,17 @@ Veri dosyalarını depoya eklemeyin.
 ---
 
 ## Bakım notları
+
+- **Arife günleri yarım gün** sayılır: Ramazan ve Kurban arifeleri ile 28 Ekim.
+  O güne denk gelen rapor/izin 0,5 gün, çalışılmışsa resmi tatil kesintisi 0,5 gündür.
+
+  > İK'nın kendi sistemi 28 Ekim'i **tam gün** sayıyor (Temmuz dosyasındaki
+  > 119 günlük kayıttan görüldü). Bu fark çıktının `Uyarı` kolonunda görünür ve
+  > İK'ya teyit ettirilmelidir.
+
+- **İzin türü ve nedeni eşleştirmesi harf duyarsızdır.** `YILLIK İZİN`,
+  `Yıllık İzin` ve `yillik izin` aynı sayılır; İK yazımı değiştirdiğinde kural
+  sessizce çalışmayı bırakmaz.
 
 - **Resmi tatil takvimi** üç katmanlıdır ve yıllarca güncelleme gerektirmeden çalışır:
   - *Sabit tarihli tatiller* (1 Ocak, 23 Nisan, 1 Mayıs, 19 Mayıs, 15 Temmuz,

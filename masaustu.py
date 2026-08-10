@@ -168,6 +168,139 @@ class KolonEslestirme(tk.Toplevel):
         self.destroy()
 
 
+class BayramTarihleri(tk.Toplevel):
+    """
+    Ramazan ve Kurban Bayramı tarihlerini elle girme penceresi.
+
+    Dini bayramlar her yıl kaydığı için program bunları hesaplar; Diyanet
+    takviminden teyit edilen tarih buradan girilince hesaplama bırakılır ve
+    "doğrulanmadı" uyarısı kalkar. Girilen tarih bayramın 1. günüdür;
+    arife (yarım gün) ve kalan günler otomatik eklenir.
+    """
+
+    def __init__(self, ana, yil):
+        super().__init__(ana)
+        self.kaydedildi = False
+        self.title("Bayram Tarihleri")
+        self.configure(bg=ZEMIN)
+        self.resizable(False, False)
+        self.transient(ana)
+
+        dis = ttk.Frame(self, padding=18)
+        dis.pack(fill='both', expand=True)
+
+        ttk.Label(dis, text="Dini Bayram Tarihleri", style='Baslik2.TLabel').pack(anchor='w')
+        ttk.Label(dis, wraplength=520, style='AltBaslik.TLabel',
+                  text="Ramazan ve Kurban Bayramı her yıl kayar. Diyanet takviminden "
+                       "teyit ettiğiniz tarihi girin; bayramın 1. günü yazılır, arife "
+                       "ve kalan günler otomatik eklenir.").pack(anchor='w', pady=(2, 14))
+
+        izgara = ttk.Frame(dis)
+        izgara.pack(fill='x')
+
+        ttk.Label(izgara, text="Yıl:").grid(row=0, column=0, sticky='w')
+        self.yil_degeri = tk.StringVar(value=str(yil))
+        ttk.Spinbox(izgara, from_=2020, to=2100, width=8, textvariable=self.yil_degeri,
+                    command=self._yil_degisti).grid(row=0, column=1, sticky='w', padx=(6, 0))
+        self.yil_degeri.trace_add('write', lambda *a: self._yil_degisti())
+
+        self.durum = ttk.Label(izgara, text="", style='Kucuk.TLabel')
+        self.durum.grid(row=0, column=2, sticky='w', padx=(14, 0))
+
+        self.girdiler = {}
+        for i, (anahtar, etiket, sure) in enumerate(
+                [('ramazan', 'Ramazan Bayramı 1. günü', 'arife + 3 gün'),
+                 ('kurban', 'Kurban Bayramı 1. günü', 'arife + 4 gün')], start=1):
+            ttk.Label(izgara, text=etiket).grid(row=i, column=0, columnspan=1,
+                                                sticky='w', pady=(10, 0))
+            degisken = tk.StringVar()
+            ttk.Entry(izgara, textvariable=degisken, width=14).grid(
+                row=i, column=1, sticky='w', padx=(6, 0), pady=(10, 0))
+            ttk.Label(izgara, text=f"gg.aa.yyyy · {sure}", style='Kucuk.TLabel').grid(
+                row=i, column=2, sticky='w', padx=(14, 0), pady=(10, 0))
+            self.girdiler[anahtar] = degisken
+
+        ttk.Label(dis, style='Kucuk.TLabel', wraplength=520,
+                  text="Boş bırakılan bayram program tarafından hesaplanmaya devam eder. "
+                       "Kaydedilen tarihler ayarlar.json dosyasına yazılır.").pack(
+            anchor='w', pady=(14, 0))
+
+        dugmeler = ttk.Frame(dis)
+        dugmeler.pack(fill='x', pady=(14, 0))
+        ttk.Button(dugmeler, text="Kaydet", style='Mavi.TButton',
+                   command=self._kaydet).pack(side='right')
+        ttk.Button(dugmeler, text="Kapat", command=self.destroy).pack(
+            side='right', padx=(0, 8))
+
+        self._yil_degisti()
+        self.bind('<Escape>', lambda e: self.destroy())
+        self.update_idletasks()
+        x = ana.winfo_rootx() + (ana.winfo_width() - self.winfo_width()) // 2
+        self.geometry(f"+{max(x, 0)}+{ana.winfo_rooty() + 90}")
+        self.grab_set()
+        ana.wait_window(self)
+
+    def _yil_degisti(self):
+        """Seçilen yılın mevcut tarihlerini kutulara doldurur."""
+        try:
+            yil = int(self.yil_degeri.get())
+        except ValueError:
+            return
+        bayramlar, dogrulandi = hesaplama._dini_bayram_baslangiclari(yil)
+        for anahtar, degisken in self.girdiler.items():
+            tarih = next((t for ad, t in bayramlar if ad.startswith(anahtar)), None)
+            degisken.set(f"{tarih:%d.%m.%Y}" if tarih else "")
+        self.durum.config(
+            text="✓ elle girilmiş, doğrulanmış" if dogrulandi
+            else "⚠ hesaplandı, doğrulanmadı")
+
+    def _kaydet(self):
+        try:
+            yil = int(self.yil_degeri.get())
+        except ValueError:
+            messagebox.showwarning("Geçersiz yıl", "Yıl sayı olmalıdır.", parent=self)
+            return
+
+        tarihler, hatali = {}, []
+        for anahtar, degisken in self.girdiler.items():
+            metin = degisken.get().strip()
+            if not metin:
+                tarihler[anahtar] = None
+                continue
+            try:
+                tarih = dt.datetime.strptime(metin, '%d.%m.%Y').date()
+            except ValueError:
+                hatali.append(metin)
+                continue
+            if tarih.year != yil:
+                messagebox.showwarning(
+                    "Yıl uyuşmuyor",
+                    f"{metin} tarihi {yil} yılına ait değil.", parent=self)
+                return
+            tarihler[anahtar] = tarih
+
+        if hatali:
+            messagebox.showwarning(
+                "Tarih okunamadı",
+                "Şu girdiler tarih olarak okunamadı:\n\n  " + "\n  ".join(hatali)
+                + "\n\nDoğru biçim: 20.03.2027", parent=self)
+            return
+
+        try:
+            yol = hesaplama.dini_bayramlari_kaydet(
+                yil, tarihler.get('ramazan'), tarihler.get('kurban'))
+        except Exception:
+            messagebox.showerror("Kaydedilemedi",
+                                 traceback.format_exc()[-800:], parent=self)
+            return
+
+        self.kaydedildi = True
+        messagebox.showinfo(
+            "Kaydedildi",
+            f"{yil} yılı bayram tarihleri kaydedildi.\n\n{yol}", parent=self)
+        self._yil_degisti()
+
+
 class Uygulama(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -231,10 +364,6 @@ class Uygulama(tk.Tk):
         kutu1.pack(fill='x')
         ttk.Button(kutu1, text="📂  Dosya Seç...", style='Mavi.TButton',
                    command=self.dosya_sec).pack(side='left')
-        self.eslestir_dugmesi = ttk.Button(
-            kutu1, text="Kolonları Eşleştir...", command=self.eslestirmeyi_duzenle,
-            state='disabled')
-        self.eslestir_dugmesi.pack(side='left', padx=(10, 0))
         self.dosya_etiketi = ttk.Label(kutu1, text="Henüz dosya seçilmedi.", style='AltBaslik.TLabel')
         self.dosya_etiketi.pack(side='left', padx=14)
 
@@ -261,11 +390,14 @@ class Uygulama(tk.Tk):
         ttk.Entry(kutu2, textvariable=self.tatil_degeri, width=46).grid(
             row=0, column=5, sticky='we', padx=(6, 0))
         kutu2.columnconfigure(5, weight=1)
+        ttk.Button(kutu2, text="Bayram Tarihleri...",
+                   command=self.bayram_tarihleri).grid(row=0, column=6, padx=(10, 0))
+
         ttk.Label(kutu2, text="Dönem ve tatiller dosyadan otomatik doldurulur. "
                               "Tatil listesi hatalıysa gg.aa.yyyy biçiminde, virgülle ayırarak düzeltin.",
-                  style='AltBaslik.TLabel').grid(row=1, column=0, columnspan=6, sticky='w', pady=(8, 0))
+                  style='AltBaslik.TLabel').grid(row=1, column=0, columnspan=7, sticky='w', pady=(8, 0))
         self.takvim_etiketi = ttk.Label(kutu2, text="", style='Uyari.TLabel', wraplength=980)
-        self.takvim_etiketi.grid(row=2, column=0, columnspan=6, sticky='w', pady=(6, 0))
+        self.takvim_etiketi.grid(row=2, column=0, columnspan=7, sticky='w', pady=(6, 0))
 
         # --- 3. Hesapla
         kutu3 = ttk.Frame(dis)
@@ -378,7 +510,6 @@ class Uygulama(tk.Tk):
         self.elle_eslesme = elle_eslesme
         self.dosya_etiketi.config(text=os.path.basename(yol), style='Dosya.TLabel')
         self.hesapla_dugmesi.config(state='normal')
-        self.eslestir_dugmesi.config(state='normal')
         self._sonucu_temizle()
 
         yil, ay = hesaplama.donem_tespit(self.veri)
@@ -390,21 +521,16 @@ class Uygulama(tk.Tk):
         self.durum_etiketi.config(
             text=f"{len(self.veri)} izin kaydı okundu · kimlik: {kimlik}")
 
-    def eslestirmeyi_duzenle(self):
-        """Kolon eşleştirmesini kullanıcı istediği zaman gözden geçirebilsin."""
-        if not self.dosya_yolu:
-            return
+    def bayram_tarihleri(self):
+        """Dini bayram tarihlerini elle girme penceresini açar."""
         try:
-            basliklar, otomatik, eksik = hesaplama.kolonlari_incele(self.dosya_yolu)
-        except Exception:
-            self._beklenmeyen_hata()
-            return
-        mevcut = dict(otomatik)
-        mevcut.update(self.elle_eslesme or {})
-        yeni = KolonEslestirme(self, basliklar, mevcut, hesaplama.KOLONLAR,
-                               tumu=True).sonuc
-        if yeni is not None:
-            self._dosyayi_yukle(self.dosya_yolu, yeni)
+            yil = self.donem[0]
+        except (ValueError, TypeError):
+            yil = dt.date.today().year
+        pencere = BayramTarihleri(self, yil)
+        if pencere.kaydedildi:
+            # Takvim değişti; dönemin tatil kutusunu ve uyarısını tazele.
+            self.donem_degisti()
 
     def _okuma_basarisiz(self, mesaj, sessiz=False):
         self.veri = None
@@ -412,7 +538,6 @@ class Uygulama(tk.Tk):
         self.elle_eslesme = None
         self.dosya_etiketi.config(text="Dosya okunmadı.", style='AltBaslik.TLabel')
         self.hesapla_dugmesi.config(state='disabled')
-        self.eslestir_dugmesi.config(state='disabled')
         self._sonucu_temizle()
         if sessiz:
             self.durum_etiketi.config(text=mesaj)
@@ -423,39 +548,39 @@ class Uygulama(tk.Tk):
         """Dönem değişince tatil kutusunu o ayın varsayılan tatilleriyle doldur."""
         try:
             donem = self.donem
-            tatiller = hesaplama.donem_tatilleri(donem)
+            liste = hesaplama.donem_tatil_listesi(donem)
         except (ValueError, TypeError):
             return
-        self.tatil_degeri.set(", ".join(f"{g:%d.%m.%Y}" for g in tatiller))
+        self.tatil_degeri.set(hesaplama.tatil_listesi_metni(liste))
         # Dini bayram tarihleri kayar; doğrulanmamış yılda kullanıcıyı uyar.
         self.takvim_etiketi.config(text=hesaplama.takvim_uyarisi(donem) or "")
         self._sonucu_temizle()
 
     def _tatilleri_coz(self):
-        """Kutudaki metni tarih kümesine çevirir; dönem dışı tatiller korunur."""
-        varsayilan = hesaplama.donem_tatilleri(self.donem)
-        tatiller = {g for g in hesaplama.RESMI_TATILLER if g not in varsayilan}
-        gecersiz = []
-        for parca in self.tatil_degeri.get().split(','):
-            parca = parca.strip()
-            if not parca:
-                continue
-            try:
-                tatiller.add(dt.datetime.strptime(parca, '%d.%m.%Y').date())
-            except ValueError:
-                gecersiz.append(parca)
-        return tatiller, gecersiz
+        """
+        Kutudaki metni tam ve yarım gün tatil kümelerine çevirir.
+
+        Dönem dışındaki tatiller korunur; kullanıcı yalnızca o ayın
+        tatillerini düzenler.
+        """
+        donem_ici = {g for g, _ in hesaplama.donem_tatil_listesi(self.donem)}
+        tam = {g for g in hesaplama.RESMI_TATILLER if g not in donem_ici}
+        yarim = {g for g in hesaplama.YARIM_GUN_TATILLER if g not in donem_ici}
+
+        yeni_tam, yeni_yarim, gecersiz = hesaplama.tatil_listesi_coz(
+            self.tatil_degeri.get())
+        return tam | yeni_tam, (yarim | yeni_yarim) - (tam | yeni_tam), gecersiz
 
     def hesapla(self):
         if self.veri is None:
             return
-        tatiller, gecersiz = self._tatilleri_coz()
+        tatiller, yarim_tatiller, gecersiz = self._tatilleri_coz()
         if gecersiz:
             messagebox.showwarning(
                 "Tarih okunamadı",
                 "Şu girdiler tarih olarak okunamadı ve yok sayılacak:\n\n  "
                 + "\n  ".join(gecersiz)
-                + "\n\nDoğru biçim: 15.07.2026",
+                + "\n\nDoğru biçim: 15.07.2026 · yarım gün için: 28.10.2026 (yarım)",
             )
 
         self.hesapla_dugmesi.config(state='disabled')
@@ -472,7 +597,8 @@ class Uygulama(tk.Tk):
         # Sonuç kuyruğa bırakılır; tkinter'a yalnızca ana iş parçacığı dokunur.
         def calis():
             try:
-                self._kuyruk.put(('tamam', hesaplama.hesapla(veri, donem, tatiller)))
+                self._kuyruk.put(('tamam', hesaplama.hesapla(
+                    veri, donem, tatiller, yarim_tatiller)))
             except Exception:
                 self._kuyruk.put(('hata', traceback.format_exc()))
 

@@ -132,8 +132,7 @@ YILLIK_IZIN_HAK_KADEMELERI = [
 # Doğrulanmamış bir yıl için hesap yapılırsa arayüz uyarı gösterir; sessizce
 # yanlış takvimle hesaplanmaz.
 
-# (ay, gün) — her yıl sabit olan resmi tatiller. Arife günleri, İK sisteminin
-# davranışına uygun olarak tam gün tatil sayılır (Temmuz 2026 verisinden doğrulandı).
+# (ay, gün) — her yıl sabit olan TAM GÜN resmi tatiller.
 SABIT_TATILLER = [
     (1, 1),     # Yılbaşı
     (4, 23),    # Ulusal Egemenlik ve Çocuk Bayramı
@@ -141,9 +140,16 @@ SABIT_TATILLER = [
     (5, 19),    # Atatürk'ü Anma, Gençlik ve Spor Bayramı
     (7, 15),    # Demokrasi ve Millî Birlik Günü
     (8, 30),    # Zafer Bayramı
-    (10, 28),   # Cumhuriyet Bayramı Arifesi
     (10, 29),   # Cumhuriyet Bayramı
 ]
+
+# Sabit tarihli YARIM GÜN tatiller (arife). Kanunen öğleden sonra başlar.
+SABIT_YARIM_TATILLER = [
+    (10, 28),   # Cumhuriyet Bayramı Arifesi
+]
+
+# Dini bayram arifeleri de yarım gün sayılır (bayramın 1. gününden bir önceki gün).
+ARIFE_YARIM_GUN = True
 
 # Dini bayramların 1. günü (arife bir önceki gündür).
 # Ramazan 3 gün + arife, Kurban 4 gün + arife sürer.
@@ -225,27 +231,43 @@ def _dini_bayram_baslangiclari(yil):
     return (sorted(bulunan, key=lambda x: x[1]), False)
 
 
-def resmi_tatiller_yil(yil):
-    """Verilen yılın tüm resmi tatilleri. Döner: (tarih kümesi, dogrulandi_mi)."""
+def resmi_tatiller_yil(yil, yarim_dahil=False):
+    """
+    Verilen yılın resmi tatilleri.
+
+    yarim_dahil=False → (tam gün tatiller, dogrulandi_mi)
+    yarim_dahil=True  → (tam gün tatiller, yarım gün tatiller, dogrulandi_mi)
+    """
     tatiller = {dt.date(yil, ay, gun) for ay, gun in SABIT_TATILLER}
+    yarimlar = {dt.date(yil, ay, gun) for ay, gun in SABIT_YARIM_TATILLER}
 
     bayramlar, dogrulandi = _dini_bayram_baslangiclari(yil)
     for ad, baslangic in bayramlar:
-        # Arife (-1) dahil, bayramın tüm günleri
-        for kayma in range(-1, _bayram_suresi(ad)):
+        for kayma in range(_bayram_suresi(ad)):
             tatiller.add(baslangic + dt.timedelta(days=kayma))
+        arife = baslangic - dt.timedelta(days=1)
+        (yarimlar if ARIFE_YARIM_GUN else tatiller).add(arife)
 
+    yarimlar -= tatiller          # tam gün tatil, yarım günün önüne geçer
+    if yarim_dahil:
+        return tatiller, yarimlar, dogrulandi
     return tatiller, dogrulandi
 
 
 def takvim_uret(ilk_yil=None, son_yil=None):
-    """Yıl aralığı için tüm resmi tatilleri tek kümede toplar."""
+    """
+    Yıl aralığı için tatilleri üretir.
+
+    Döner: (tam gün tatiller, yarım gün tatiller)
+    """
     ilk_yil = ilk_yil or TAKVIM_ILK_YIL
     son_yil = son_yil or TAKVIM_SON_YIL
-    tatiller = set()
+    tam, yarim = set(), set()
     for yil in range(ilk_yil, son_yil + 1):
-        tatiller |= resmi_tatiller_yil(yil)[0]
-    return tatiller
+        t, y, _ = resmi_tatiller_yil(yil, yarim_dahil=True)
+        tam |= t
+        yarim |= y
+    return tam, yarim
 
 
 def takvim_dogrulandi_mi(yil):
@@ -381,8 +403,9 @@ def ayarlari_yukle(yol=None):
                 except ValueError:
                     hatali.append(f"{yil} {ad}: {metin}")
         if cozulen:
+            global YARIM_GUN_TATILLER
             DOGRULANMIS_DINI_BAYRAMLAR = cozulen
-            RESMI_TATILLER = takvim_uret()
+            RESMI_TATILLER, YARIM_GUN_TATILLER = takvim_uret()
 
     # Açık tatil listesi verilmişse üretilen takvimin yerine geçer.
     if 'resmi_tatiller' in ayarlar:
@@ -399,6 +422,50 @@ def ayarlari_yukle(yol=None):
         ayar_uyarisi = (f"{yol.name}: tarih olarak okunamayan resmi tatil girdileri "
                         f"yok sayıldı ({', '.join(hatali)})")
     return True
+
+
+def dini_bayramlari_kaydet(yil, ramazan, kurban, yol=None):
+    """
+    Bir yılın dini bayram tarihlerini ayar dosyasına yazar ve takvimi yeniler.
+
+    ramazan / kurban: bayramın 1. günü (date). Arife ve kalan günler otomatik
+    eklenir. Kaydedilen yıl "doğrulanmış" sayılır, uyarı gösterilmez.
+    None verilirse o bayram takvimden hesaplanmaya devam eder.
+    """
+    global DOGRULANMIS_DINI_BAYRAMLAR, RESMI_TATILLER, YARIM_GUN_TATILLER
+    yol = Path(yol) if yol else ayar_dosyasi_yolu()
+
+    mevcut = {}
+    if yol.exists():
+        try:
+            with open(yol, encoding='utf-8-sig') as dosya:
+                mevcut = json.load(dosya)
+        except Exception:
+            mevcut = {}
+
+    bayramlar = {}
+    for ad, tarih in (('ramazan', ramazan), ('kurban', kurban)):
+        if tarih is not None:
+            bayramlar[ad] = f"{tarih:%d.%m.%Y}"
+
+    kayitli = mevcut.get('dogrulanmis_dini_bayramlar') or {}
+    if bayramlar:
+        kayitli[str(yil)] = bayramlar
+    else:
+        kayitli.pop(str(yil), None)
+    mevcut['dogrulanmis_dini_bayramlar'] = kayitli
+
+    with open(yol, 'w', encoding='utf-8') as dosya:
+        json.dump(mevcut, dosya, ensure_ascii=False, indent=2)
+
+    # Bellekteki takvimi de güncelle
+    DOGRULANMIS_DINI_BAYRAMLAR = {
+        int(y): {ad: tuple(int(p) for p in reversed(t.split('.')[:2]))
+                 for ad, t in b.items()}
+        for y, b in kayitli.items()
+    }
+    RESMI_TATILLER, YARIM_GUN_TATILLER = takvim_uret()
+    return yol
 
 
 def ayarlari_disa_aktar(yol=None):
@@ -436,7 +503,8 @@ def ayarlari_disa_aktar(yol=None):
 
 
 # Sabit tatiller ve dini bayramlardan yıl aralığı için takvim üretilir.
-RESMI_TATILLER = takvim_uret()
+# RESMI_TATILLER: tam gün tatiller · YARIM_GUN_TATILLER: arife günleri
+RESMI_TATILLER, YARIM_GUN_TATILLER = takvim_uret()
 
 # Varsa ayar dosyasındaki kurallar gömülü varsayılanların üzerine yazılır.
 ayarlari_yukle()
@@ -453,8 +521,26 @@ def gun_araligi(baslangic, bitis):
 
 
 def is_gunu(gun, tatiller):
-    """Hafta içi ve resmi tatil değilse iş günüdür."""
+    """Hafta içi ve tam gün resmi tatil değilse iş günüdür (arife dahildir)."""
     return gun.weekday() < 5 and gun not in tatiller
+
+
+def gun_agirligi(gun, tatiller, yarim_tatiller=None):
+    """
+    Günün kaç iş günü değerinde olduğunu döner.
+
+    1.0 normal iş günü · 0.5 arife (yarım gün) · 0.0 hafta sonu veya tam tatil
+    """
+    if not is_gunu(gun, tatiller):
+        return 0.0
+    if yarim_tatiller and gun in yarim_tatiller:
+        return 0.5
+    return 1.0
+
+
+def gun_toplami(gunler, tatiller, yarim_tatiller=None):
+    """Gün kümesinin iş günü karşılığı (arifeler yarım sayılır)."""
+    return sum(gun_agirligi(g, tatiller, yarim_tatiller) for g in gunler)
 
 
 def hafta_basi(gun):
@@ -469,10 +555,57 @@ def donem_sinirlari(donem):
 
 
 def donem_tatilleri(donem, tatiller=None):
-    """Dönem ayına düşen resmi tatilleri sıralı liste olarak döner."""
+    """Dönem ayına düşen TAM GÜN resmi tatilleri sıralı liste olarak döner."""
     ilk, son = donem_sinirlari(donem)
     kaynak = RESMI_TATILLER if tatiller is None else tatiller
     return sorted(g for g in kaynak if ilk <= g <= son)
+
+
+YARIM_ETIKETI = 'yarım'
+
+
+def donem_tatil_listesi(donem, tatiller=None, yarim_tatiller=None):
+    """
+    Dönemin tüm tatillerini yarım gün bilgisiyle birlikte döner.
+
+    Döner: [(tarih, yarim_mi), ...] — tarihe göre sıralı.
+    Arayüzdeki tatil kutusu bunu kullanır; arife günleri de görünsün diye.
+    """
+    ilk, son = donem_sinirlari(donem)
+    tam = RESMI_TATILLER if tatiller is None else tatiller
+    yarim = YARIM_GUN_TATILLER if yarim_tatiller is None else yarim_tatiller
+    liste = [(g, False) for g in tam if ilk <= g <= son]
+    liste += [(g, True) for g in yarim if ilk <= g <= son and g not in tam]
+    return sorted(liste)
+
+
+def tatil_listesi_metni(liste):
+    """Tatil listesini kullanıcıya gösterilecek metne çevirir."""
+    return ", ".join(f"{g:%d.%m.%Y}" + (f" ({YARIM_ETIKETI})" if y else "")
+                     for g, y in liste)
+
+
+def tatil_listesi_coz(metin):
+    """
+    Kullanıcının yazdığı tatil metnini çözer.
+
+    '15.07.2026, 28.10.2026 (yarım)' → ({15.07}, {28.10}, [])
+    Döner: (tam gün kümesi, yarım gün kümesi, okunamayan girdiler)
+    """
+    tam, yarim, hatali = set(), set(), []
+    for parca in (metin or '').split(','):
+        parca = parca.strip()
+        if not parca:
+            continue
+        yarim_mi = _normalize_baslik(YARIM_ETIKETI) in _normalize_baslik(parca)
+        tarih_metni = re.sub(r'\(.*?\)', '', parca).strip()
+        try:
+            tarih = dt.datetime.strptime(tarih_metni, '%d.%m.%Y').date()
+        except ValueError:
+            hatali.append(parca)
+            continue
+        (yarim if yarim_mi else tam).add(tarih)
+    return tam, yarim - tam, hatali
 
 
 def kismi_gun_kesintisi(toplam_saat):
@@ -529,11 +662,27 @@ def yillik_izin_kismi_kesintisi(toplam_gun):
     return math.ceil(toplam_gun)
 
 
+def deger_esit(deger, hedef):
+    """
+    İki metni büyük/küçük harf ve Türkçe karakter farkını yok sayarak karşılaştırır.
+
+    'YILLIK İZİN', 'Yıllık İzin' ve 'yillik izin' aynı sayılır; böylece İK
+    sistemi yazımı değiştirdiğinde kural sessizce çalışmayı bırakmaz.
+    """
+    return _normalize_baslik(deger) == _normalize_baslik(hedef)
+
+
+def deger_iceriyor(deger, hedefler):
+    """Metin, verilen kümedeki değerlerden biriyle eşleşiyor mu? (harf duyarsız)"""
+    normalize = _normalize_baslik(deger)
+    return any(normalize == _normalize_baslik(h) for h in hedefler)
+
+
 def rapor_mu(satir):
     """Satır hastalık raporu ya da doğum istirahati mi?"""
     return (
-        satir['İzin Türü'] == RAPOR_IZIN_TURU
-        and satir['İzin Nedeni'] in RAPOR_NEDENLERI
+        deger_esit(satir['İzin Türü'], RAPOR_IZIN_TURU)
+        and deger_iceriyor(satir['İzin Nedeni'], RAPOR_NEDENLERI)
     )
 
 
@@ -713,14 +862,14 @@ def oku(kaynak, elle_eslesme=None):
     return df
 
 
-def sureleri_hesapla(df, tatiller):
+def sureleri_hesapla(df, tatiller, yarim_tatiller=None):
     """
     Süre kolonları dosyada yoksa izin tarihlerinden üretir.
 
-    Gün sayısı = aralıktaki hafta içi günler (resmi tatiller hariç),
+    Gün sayısı = aralıktaki iş günleri (tam tatiller hariç, arifeler yarım),
     saat = gün × günlük çalışma saati.
 
-    Not: Tarihlerden yarım gün ayırt edilemez; her kayıt tam gün sayılır.
+    Not: Tarihlerden saatlik izin ayırt edilemez; her kayıt tam gün sayılır.
     Dosyada süre kolonu varsa bu fonksiyon hiçbir şey yapmaz.
     """
     eksik = df.attrs.get('sure_hesaplanacak') or []
@@ -729,9 +878,10 @@ def sureleri_hesapla(df, tatiller):
 
     df = df.copy()
     gunler = df.apply(
-        lambda s: sum(1 for g in gun_araligi(s['İzin Başlangıç Tarihi'].date(),
-                                             s['İzin Bitiş Tarihi'].date())
-                      if is_gunu(g, tatiller)),
+        lambda s: gun_toplami(
+            gun_araligi(s['İzin Başlangıç Tarihi'].date(),
+                        s['İzin Bitiş Tarihi'].date()),
+            tatiller, yarim_tatiller),
         axis=1,
     ).astype(float)
 
@@ -752,26 +902,39 @@ def donem_tespit(df):
 
 # ---------------------------------------------------------------- hesaplama
 
-def tutarlilik_uyarisi(satir, tatiller):
+def tutarlilik_uyarisi(satir, tatiller, yarim_tatiller=None):
     """
     Dosyadaki quantityInDays ile hesaplanan iş günü sayısını karşılaştırır.
 
     Sapma genellikle resmi tatil takviminin eksik/fazla olduğunu gösterir.
-    Yalnızca tam gün satırlarında anlamlıdır; kısmi izinlerde kontrol edilmez.
+    Arife günleri yarım sayıldığı için 0,5'lik farklar da anlamlıdır.
+    Saatlik izinlerde (1 günden az) kontrol edilmez.
     """
     gun_sayisi = satir['quantityInDays']
-    if gun_sayisi < 1 or gun_sayisi != int(gun_sayisi):
+    if gun_sayisi < 1:
         return None
 
     baslangic = satir['İzin Başlangıç Tarihi'].date()
     bitis = satir['İzin Bitiş Tarihi'].date()
-    hesaplanan = sum(1 for g in gun_araligi(baslangic, bitis) if is_gunu(g, tatiller))
-    if hesaplanan == int(gun_sayisi):
+    hesaplanan = gun_toplami(gun_araligi(baslangic, bitis), tatiller, yarim_tatiller)
+    if hesaplanan == gun_sayisi:
         return None
-    return (
-        f"{baslangic:%d.%m.%Y}-{bitis:%d.%m.%Y} aralığı: dosyada {int(gun_sayisi)} gün, "
-        f"tatil takvimine göre {hesaplanan} gün (resmi tatil listesi kontrol edilmeli)"
+
+    mesaj = (f"{baslangic:%d.%m.%Y}-{bitis:%d.%m.%Y} aralığı: dosyada "
+             f"{gun_sayisi:g} gün, tatil takvimine göre {hesaplanan:g} gün")
+
+    # Fark tam olarak arife günlerinden geliyorsa sebebi açıkça söyle; kullanıcı
+    # "neden 0,5 fark var" diye aramasın.
+    araliktaki_arifeler = sorted(
+        g for g in (yarim_tatiller or ())
+        if baslangic <= g <= bitis and g.weekday() < 5 and g not in tatiller
     )
+    if araliktaki_arifeler and hesaplanan - gun_sayisi == 0.5 * len(araliktaki_arifeler):
+        tarihler = ", ".join(f"{g:%d.%m.%Y}" for g in araliktaki_arifeler)
+        return (mesaj + f". Fark {tarihler} arife günlerinden geliyor: biz yarım gün "
+                        f"sayıyoruz, dosyayı üreten sistem tam gün saymış")
+
+    return mesaj + " (resmi tatil listesi kontrol edilmeli)"
 
 
 def _ek_kolon_degeri(satirlar, kolon):
@@ -861,7 +1024,8 @@ def kidem_yeterli_mi(ise_baslama, izin_baslangic):
     return izin_baslangic >= yildonumu
 
 
-def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None):
+def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None,
+                     yarim_tatiller=None):
     """
     Tek personelin dönem içi destek gün/saatini ve kesinti kırılımını hesaplar.
 
@@ -874,6 +1038,7 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None):
     raporlu personelde düşer; yıllık izinde ayrıca kıdem şartı aranır.
     """
     ay_ilk, ay_son = donem_sinirlari(donem)
+    yarim_tatiller = set(yarim_tatiller or ())
 
     def _ilk_deger(kolon):
         if kolon not in satirlar.columns:
@@ -893,7 +1058,7 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None):
     uyarilar = []
     rapor_satirlari, diger_satirlar = [], []
     for _, satir in satirlar.iterrows():
-        uyari = tutarlilik_uyarisi(satir, tatiller)
+        uyari = tutarlilik_uyarisi(satir, tatiller, yarim_tatiller)
         if uyari:
             uyarilar.append(uyari)
 
@@ -908,7 +1073,7 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None):
     # Kıdem, dönemin ilk gününe göre hesaplanır (İş Kanunu Md. 53 kademeleri).
     kidem = kidem_yili(ise_baslama, donem_ilk)
     hak = yillik_izin_hakki(kidem)
-    yillik_izinli_mi = any(s['İzin Türü'] in KESINTI_IZIN_TURLERI
+    yillik_izinli_mi = any(deger_iceriyor(s['İzin Türü'], KESINTI_IZIN_TURLERI)
                            for s, _, _ in diger_satirlar)
 
     sonuc = {(kimlik_ad or KIMLIK_KOLONU): satirlar[KIMLIK_KOLONU].iloc[0]}
@@ -950,7 +1115,7 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None):
     # durumundan bağımsız olarak her personelde düşer.
     ucretsiz_gunleri = set()
     for satir, baslangic, bitis in diger_satirlar:
-        if satir['İzin Türü'] not in HER_KOSULDA_KESINTI_TURLERI:
+        if not deger_iceriyor(satir['İzin Türü'], HER_KOSULDA_KESINTI_TURLERI):
             continue
         for gun in gun_araligi(baslangic, bitis):
             if is_gunu(gun, tatiller):
@@ -958,7 +1123,7 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None):
 
     if not rapor_satirlari:
         # Raporu olmayan personelde yıllık izin ve resmi tatil düşmez.
-        toplam = float(len(ucretsiz_gunleri))
+        toplam = gun_toplami(ucretsiz_gunleri, tatiller, yarim_tatiller)
         destek = max(0.0, taban - toplam)
         sonuc.update({
             'Ücretsiz İzin Kesintisi': toplam,
@@ -1002,7 +1167,7 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None):
     yarim_gun_toplami = 0.0
     kidemsiz_atlanan = 0
     for satir, baslangic, bitis in diger_satirlar:
-        if satir['İzin Türü'] not in KESINTI_IZIN_TURLERI:
+        if not deger_iceriyor(satir['İzin Türü'], KESINTI_IZIN_TURLERI):
             continue
         if not kidem_yeterli_mi(ise_baslama, satir['İzin Başlangıç Tarihi'].date()):
             kidemsiz_atlanan += 1
@@ -1023,33 +1188,44 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None):
             f"dolmadığı için kesintiye dahil edilmedi (İş Kanunu Md. 53)"
         )
 
-    # (d) Dönem içindeki hafta içine denk gelen resmi tatiller.
-    resmi_tatil_gunleri = {
-        g for g in gun_araligi(donem_ilk, donem_son)
-        if g in tatiller and g.weekday() < 5
-    }
-
     # Aynı gün birden çok kategoride işaretlenmiş olabilir; mükerrer saymamak
-    # için rapor günleri kazanır. Hafta sonları Cmt-Paz, resmi tatiller ise
-    # iş günü kümelerinin dışında olduğu için tanımı gereği ayrık.
+    # için rapor günleri kazanır. Hafta sonları Cmt-Paz olduğu için ayrıktır.
     izin_gunleri -= rapor_gunleri
     ucretsiz_gunleri -= rapor_gunleri | izin_gunleri
 
+    # (d) Dönem içindeki hafta içine denk gelen resmi tatiller. Tam gün tatiller
+    # tanımı gereği izin/rapor kümelerine giremez; arife ise yarım iş günü
+    # olduğundan girebilir, o yüzden çıkarılır.
+    tam_tatil_gunleri = {
+        g for g in gun_araligi(donem_ilk, donem_son)
+        if g in tatiller and g.weekday() < 5
+    }
+    arife_gunleri = {
+        g for g in gun_araligi(donem_ilk, donem_son)
+        if g in yarim_tatiller and g.weekday() < 5 and g not in tatiller
+    } - (rapor_gunleri | izin_gunleri | ucretsiz_gunleri)
+    resmi_tatil_kesintisi = len(tam_tatil_gunleri) + 0.5 * len(arife_gunleri)
+
+    # Arifeye denk gelen izin/rapor günleri yarım sayılır.
+    rapor_kesintisi = gun_toplami(rapor_gunleri, tatiller, yarim_tatiller)
+    ucretsiz_kesintisi = gun_toplami(ucretsiz_gunleri, tatiller, yarim_tatiller)
     kismi_kesinti = kismi_gun_kesintisi(kismi_saat)
-    yillik_kesinti = len(izin_gunleri) + yillik_izin_kismi_kesintisi(yarim_gun_toplami)
+    yillik_kesinti = (gun_toplami(izin_gunleri, tatiller, yarim_tatiller)
+                      + yillik_izin_kismi_kesintisi(yarim_gun_toplami))
+
     toplam_kesinti = (
-        len(rapor_gunleri) + len(hafta_sonlari) + yillik_kesinti
-        + len(resmi_tatil_gunleri) + len(ucretsiz_gunleri) + kismi_kesinti
+        rapor_kesintisi + len(hafta_sonlari) + yillik_kesinti
+        + resmi_tatil_kesintisi + ucretsiz_kesintisi + kismi_kesinti
     )
     destek_gun = max(0.0, taban - toplam_kesinti)
 
     sonuc.update({
-        'Rapor Gün': float(len(rapor_gunleri)),
+        'Rapor Gün': float(rapor_kesintisi),
         'Hafta Sonu Kesintisi': float(len(hafta_sonlari)),
         'Yıllık İzin Kesintisi': float(yillik_kesinti),
-        'Resmi Tatil Kesintisi': float(len(resmi_tatil_gunleri)),
+        'Resmi Tatil Kesintisi': float(resmi_tatil_kesintisi),
         'Kısmi Rapor Kesintisi': kismi_kesinti,
-        'Ücretsiz İzin Kesintisi': float(len(ucretsiz_gunleri)),
+        'Ücretsiz İzin Kesintisi': float(ucretsiz_kesintisi),
         'Toplam Kesinti': float(toplam_kesinti),
         'Destek Gün': destek_gun,
         'Destek Saat': destek_gun * GUNLUK_SAAT,
@@ -1058,28 +1234,32 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None):
     return sonuc
 
 
-def hesapla(df, donem=None, tatiller=None):
+def hesapla(df, donem=None, tatiller=None, yarim_tatiller=None):
     """
     Tüm personel için destek gün/saat tablosunu üretir.
 
     donem: (yıl, ay); verilmezse veriden tespit edilir.
-    tatiller: resmi tatil tarihleri kümesi; verilmezse RESMI_TATILLER kullanılır.
+    tatiller: tam gün resmi tatiller; verilmezse RESMI_TATILLER kullanılır.
+    yarim_tatiller: arife günleri (yarım gün); verilmezse YARIM_GUN_TATILLER.
     """
     if donem is None:
         donem = donem_tespit(df)
     tatiller = set(RESMI_TATILLER if tatiller is None else tatiller)
+    yarim_tatiller = set(YARIM_GUN_TATILLER if yarim_tatiller is None else yarim_tatiller)
+    yarim_tatiller -= tatiller
 
     # Süre kolonları dosyada yoksa tarihlerden üretilir.
     sure_hesaplandi = bool(df.attrs.get('sure_hesaplanacak'))
     kimlik_ad = df.attrs.get('kimlik_ad', KIMLIK_KOLONU)
-    df = sureleri_hesapla(df, tatiller)
+    df = sureleri_hesapla(df, tatiller, yarim_tatiller)
 
     # Girdideki tanınmayan kolonlar bilgi kolonu kabul edilip çıktıya taşınır.
     ek_kolonlar = [k for k in df.columns
                    if k not in KOLONLAR and k not in SURE_KOLONLARI]
 
     sonuclar = [
-        hesapla_personel(satirlar, donem, tatiller, ek_kolonlar, kimlik_ad)
+        hesapla_personel(satirlar, donem, tatiller, ek_kolonlar, kimlik_ad,
+                         yarim_tatiller)
         for _, satirlar in df.groupby(KIMLIK_KOLONU, sort=True)
     ]
     sonuc_df = pd.DataFrame(sonuclar)

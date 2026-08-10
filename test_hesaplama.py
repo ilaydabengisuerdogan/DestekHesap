@@ -116,8 +116,17 @@ def test_gercek_veri_raporsuz_personel_tam_destek(gercek_sonuc):
 
 
 def test_gercek_veri_tatil_takvimi_tutarli(gercek_sonuc):
-    """Varsayılan takvimle hiçbir satırda quantityInDays sapması olmamalı."""
-    assert not gercek_sonuc['Uyarı'].str.contains('resmi tatil listesi').any()
+    """
+    Takvim sapması yalnızca bilinen tek kayıtta olmalı.
+
+    1043 numaralı personelin izni 31.12.2026'ya uzanıyor ve İK sistemi 119 gün
+    yazmış. Biz 28 Ekim arifesini yarım gün saydığımız için 119,5 buluyoruz.
+    Yani İK sistemi arifeyi TAM gün sayıyor; bu fark İK'ya teyit ettirilmeli.
+    """
+    sapan = gercek_sonuc[gercek_sonuc['Uyarı'] != '']
+    assert list(sapan['Çalışan Numarası']) == [1043]
+    uyari = sapan['Uyarı'].iloc[0]
+    assert '119.5' in uyari and 'arife' in uyari and '28.10.2026' in uyari
 
 
 def test_gercek_veri_kirilim_toplami_tutarli(gercek_sonuc):
@@ -416,6 +425,45 @@ def test_donemde_hic_calismayan_personel():
     assert 'çalışmıyor' in sonuc['Uyarı']
 
 
+# ------------------------------- büyük/küçük harf ve yazım duyarsızlığı
+
+@pytest.mark.parametrize('yazim', [
+    'Yıllık İzin', 'YILLIK İZİN', 'yıllık izin', 'Yillik Izin', ' Yıllık  İzin ',
+])
+def test_izin_turu_yazimi_onemsiz(yazim):
+    """İK yazımı değiştirdiğinde kural sessizce çalışmayı bırakmamalı."""
+    sonuc = hesapla([
+        rapor(1, '2026-07-09', '2026-07-09', 1),
+        satir(1, yazim, '2026-07-20', '2026-07-21', 2),
+    ])
+    assert sonuc['Yıllık İzin Kesintisi'] == 2
+
+
+@pytest.mark.parametrize('turu, nedeni', [
+    ('Şirket Dışında Olma Nedeni', 'Hastalık Raporu'),
+    ('ŞİRKET DIŞINDA OLMA NEDENİ', 'HASTALIK RAPORU'),
+    ('şirket dışında olma nedeni', 'hastalik raporu'),
+    ('Sirket Disinda Olma Nedeni', 'Hastalık Raporu'),
+])
+def test_rapor_tespiti_yazimdan_etkilenmez(turu, nedeni):
+    sonuc = hesapla([satir(1, turu, '2026-07-09', '2026-07-09', 1, nedeni)])
+    assert sonuc['Rapor Durumu'] == 'Raporlu'
+
+
+@pytest.mark.parametrize('yazim', ['Ücretsiz İzin', 'ÜCRETSİZ İZİN', 'ucretsiz izin'])
+def test_ucretsiz_izin_yazimi_onemsiz(yazim):
+    sonuc = hesapla([satir(1, yazim, '2026-07-27', '2026-07-31', 5)])
+    assert sonuc['Ücretsiz İzin Kesintisi'] == 5
+
+
+def test_mazeret_izni_yazimi_ne_olursa_olsun_dusmez():
+    sonuc = hesapla([
+        rapor(1, '2026-07-09', '2026-07-09', 1),
+        satir(1, 'MAZERET İZNİ', '2026-07-20', '2026-07-21', 2),
+    ])
+    assert sonuc['Yıllık İzin Kesintisi'] == 0
+
+
 # ------------------------------------- Kural 3: yıllık izinde gün sayımı
 
 @pytest.mark.parametrize('toplam, beklenen', [
@@ -545,27 +593,29 @@ def test_takvim_gelecek_yillari_kapsar():
     yillar = {g.year for g in hesaplama.RESMI_TATILLER}
     assert {2026, 2027, 2030, 2035} <= yillar
     for yil in range(2026, 2036):
-        tatiller, _ = hesaplama.resmi_tatiller_yil(yil)
-        assert len(tatiller) >= 15, f"{yil} yılında yalnızca {len(tatiller)} tatil"
+        tam, yarim, _ = hesaplama.resmi_tatiller_yil(yil, yarim_dahil=True)
+        assert len(tam) + len(yarim) >= 15, f"{yil} yılında yalnızca {len(tam)} tatil"
 
 
 @pytest.mark.parametrize('yil', [2026, 2027, 2030, 2035])
 def test_sabit_tatiller_her_yil_uretilir(yil):
     """15 Temmuz, 1 Ocak gibi sabit tarihler her yıl takvimde olmalı."""
-    tatiller, _ = hesaplama.resmi_tatiller_yil(yil)
-    for ay, gun in [(1, 1), (4, 23), (5, 1), (5, 19), (7, 15), (8, 30), (10, 28), (10, 29)]:
-        assert dt.date(yil, ay, gun) in tatiller
+    tam, yarim, _ = hesaplama.resmi_tatiller_yil(yil, yarim_dahil=True)
+    for ay, gun in [(1, 1), (4, 23), (5, 1), (5, 19), (7, 15), (8, 30), (10, 29)]:
+        assert dt.date(yil, ay, gun) in tam
+    assert dt.date(yil, 10, 28) in yarim          # Cumhuriyet Bayramı arifesi
 
 
 def test_2026_takvimi_dogrulanmis_tarihlerle_uretilir():
-    """Elle girilen 2026 tarihleri, önceki sabit listeyle birebir aynı olmalı."""
-    tatiller, dogrulandi = hesaplama.resmi_tatiller_yil(2026)
+    """2026 takvimi: tam gün tatiller ve arifeler ayrı ayrı."""
+    tam, yarim, dogrulandi = hesaplama.resmi_tatiller_yil(2026, yarim_dahil=True)
     assert dogrulandi is True
-    beklenen = {
-        (1, 1), (3, 19), (3, 20), (3, 21), (3, 22), (4, 23), (5, 1), (5, 19),
-        (5, 26), (5, 27), (5, 28), (5, 29), (5, 30), (7, 15), (8, 30), (10, 28), (10, 29),
+    assert {(g.month, g.day) for g in tam} == {
+        (1, 1), (3, 20), (3, 21), (3, 22), (4, 23), (5, 1), (5, 19),
+        (5, 27), (5, 28), (5, 29), (5, 30), (7, 15), (8, 30), (10, 29),
     }
-    assert {(g.month, g.day) for g in tatiller} == beklenen
+    # Arifeler: Ramazan 19 Mart, Kurban 26 Mayıs, Cumhuriyet 28 Ekim
+    assert {(g.month, g.day) for g in yarim} == {(3, 19), (5, 26), (10, 28)}
 
 
 def test_dogrulanmamis_yil_uyari_verir():
@@ -578,15 +628,50 @@ def test_dogrulanmamis_yil_uyari_verir():
     assert uyari and 'doğrulanmadı' in uyari and '2027' in uyari
 
 
-def test_bayram_arifesi_ve_tum_gunleri_eklenir():
-    """Ramazan arife + 3 gün, Kurban arife + 4 gün sürer."""
-    tatiller, _ = hesaplama.resmi_tatiller_yil(2026)
-    for gun in range(19, 23):                      # 19-22 Mart
-        assert dt.date(2026, 3, gun) in tatiller
-    assert dt.date(2026, 3, 23) not in tatiller
-    for gun in range(26, 31):                      # 26-30 Mayıs
-        assert dt.date(2026, 5, gun) in tatiller
-    assert dt.date(2026, 5, 31) not in tatiller
+def test_bayram_arifesi_yarim_gun_bayram_gunleri_tam():
+    """Ramazan arife + 3 tam gün, Kurban arife + 4 tam gün."""
+    tam, yarim, _ = hesaplama.resmi_tatiller_yil(2026, yarim_dahil=True)
+
+    assert dt.date(2026, 3, 19) in yarim           # Ramazan arifesi
+    for gun in range(20, 23):
+        assert dt.date(2026, 3, gun) in tam
+    assert dt.date(2026, 3, 23) not in tam
+
+    assert dt.date(2026, 5, 26) in yarim           # Kurban arifesi
+    for gun in range(27, 31):
+        assert dt.date(2026, 5, gun) in tam
+    assert dt.date(2026, 5, 31) not in tam
+
+
+def test_arife_gunu_yarim_is_gunu_sayilir():
+    tam, yarim, _ = hesaplama.resmi_tatiller_yil(2026, yarim_dahil=True)
+    assert hesaplama.gun_agirligi(dt.date(2026, 10, 28), tam, yarim) == 0.5   # arife
+    assert hesaplama.gun_agirligi(dt.date(2026, 10, 29), tam, yarim) == 0.0   # tam tatil
+    assert hesaplama.gun_agirligi(dt.date(2026, 10, 27), tam, yarim) == 1.0   # normal
+    assert hesaplama.gun_agirligi(dt.date(2026, 10, 31), tam, yarim) == 0.0   # cumartesi
+
+
+def test_arifeye_denk_gelen_rapor_yarim_gun_duser():
+    """28 Ekim arifesinde raporlu olan personel tam gün değil yarım gün kaybeder."""
+    tam, yarim, _ = hesaplama.resmi_tatiller_yil(2026, yarim_dahil=True)
+    sonuc = hesaplama.hesapla(
+        pd.DataFrame([rapor(1, '2026-10-28', '2026-10-28', 1)]),
+        (2026, 10), tam, yarim,
+    ).iloc[0]
+    assert sonuc['Rapor Gün'] == 0.5
+    # Arife rapor gününde sayıldığı için resmi tatilden tekrar düşülmez
+    assert sonuc['Resmi Tatil Kesintisi'] == 1.0      # yalnızca 29 Ekim
+
+
+def test_arife_calisilmadiginda_yarim_gun_kesinti():
+    """Raporlu personelde arife, resmi tatil kesintisi olarak 0,5 sayılır."""
+    tam, yarim, _ = hesaplama.resmi_tatiller_yil(2026, yarim_dahil=True)
+    sonuc = hesaplama.hesapla(
+        pd.DataFrame([rapor(1, '2026-10-05', '2026-10-05', 1)]),
+        (2026, 10), tam, yarim,
+    ).iloc[0]
+    # Ekim 2026: 29 Ekim tam tatil (1) + 28 Ekim arife (0,5)
+    assert sonuc['Resmi Tatil Kesintisi'] == 1.5
 
 
 def test_yilda_iki_kez_gecen_bayram_kaybolmaz():
@@ -596,9 +681,9 @@ def test_yilda_iki_kez_gecen_bayram_kaybolmaz():
     assert len(ramazanlar) == 2
     assert {t.month for t in ramazanlar} == {1, 12}
 
-    tatiller, _ = hesaplama.resmi_tatiller_yil(2033)
-    assert dt.date(2033, 1, 3) in tatiller
-    assert dt.date(2033, 12, 23) in tatiller
+    tam, _ = hesaplama.resmi_tatiller_yil(2033)
+    assert dt.date(2033, 1, 3) in tam
+    assert dt.date(2033, 12, 23) in tam
 
 
 def test_ayar_dosyasindan_dini_bayram_dogrulanabilir(tmp_path):
@@ -613,16 +698,87 @@ def test_ayar_dosyasindan_dini_bayram_dogrulanabilir(tmp_path):
 
     onceki = dict(hesaplama.DOGRULANMIS_DINI_BAYRAMLAR)
     onceki_tatiller = set(hesaplama.RESMI_TATILLER)
+    onceki_yarim = set(hesaplama.YARIM_GUN_TATILLER)
     try:
         assert hesaplama.ayarlari_yukle(yol) is True
         assert hesaplama.takvim_dogrulandi_mi(2027) is True
         assert hesaplama.takvim_uyarisi((2027, 3)) is None
-        tatiller, _ = hesaplama.resmi_tatiller_yil(2027)
-        assert dt.date(2027, 3, 10) in tatiller       # arife
-        assert dt.date(2027, 3, 13) in tatiller       # 3. gün
+        tam, yarim, _ = hesaplama.resmi_tatiller_yil(2027, yarim_dahil=True)
+        assert dt.date(2027, 3, 10) in yarim          # arife (yarım gün)
+        assert dt.date(2027, 3, 13) in tam            # 3. gün
     finally:
         hesaplama.DOGRULANMIS_DINI_BAYRAMLAR = onceki
         hesaplama.RESMI_TATILLER = onceki_tatiller
+        hesaplama.YARIM_GUN_TATILLER = onceki_yarim
+
+
+def test_ayar_dosyasi_yuklendikten_sonra_hesap_calisir(tmp_path):
+    """
+    Ayar dosyasında dini bayram tarihi varsa takvim yeniden üretilir.
+    Bu yol, tam ve yarım gün kümelerini birlikte döndürür; tek değişkene
+    atanırsa hesaplama çöker. (Kurulumda gerçekten yaşandı.)
+    """
+    yol = tmp_path / 'ayarlar.json'
+    yol.write_text(json.dumps({
+        'dogrulanmis_dini_bayramlar': {
+            '2026': {'ramazan': '20.03.2026', 'kurban': '27.05.2026'},
+        }
+    }, ensure_ascii=False), encoding='utf-8')
+
+    onceki_bayram = dict(hesaplama.DOGRULANMIS_DINI_BAYRAMLAR)
+    onceki_tam = set(hesaplama.RESMI_TATILLER)
+    onceki_yarim = set(hesaplama.YARIM_GUN_TATILLER)
+    try:
+        assert hesaplama.ayarlari_yukle(yol) is True
+        assert isinstance(hesaplama.RESMI_TATILLER, set)
+        assert isinstance(hesaplama.YARIM_GUN_TATILLER, set)
+        # Yüklemeden sonra tam bir hesap koşabilmeli
+        sonuc = hesaplama.hesapla(
+            pd.DataFrame([rapor(1, '2026-07-09', '2026-07-09', 1)]), TEMMUZ)
+        assert sonuc['Destek Gün'].iloc[0] > 0
+    finally:
+        hesaplama.DOGRULANMIS_DINI_BAYRAMLAR = onceki_bayram
+        hesaplama.RESMI_TATILLER = onceki_tam
+        hesaplama.YARIM_GUN_TATILLER = onceki_yarim
+
+
+# --------------------------------------------- tatil listesi metni (arayüz)
+
+def test_donem_tatil_listesi_arifeyi_de_gosterir():
+    """Arife günleri arayüzdeki tatil kutusunda görünmeli."""
+    liste = hesaplama.donem_tatil_listesi((2026, 10))
+    assert (dt.date(2026, 10, 28), True) in liste       # arife
+    assert (dt.date(2026, 10, 29), False) in liste      # tam gün
+    metin = hesaplama.tatil_listesi_metni(liste)
+    assert '28.10.2026 (yarım)' in metin
+    assert '29.10.2026' in metin
+
+
+@pytest.mark.parametrize('metin, tam, yarim', [
+    ('15.07.2026', {dt.date(2026, 7, 15)}, set()),
+    ('28.10.2026 (yarım)', set(), {dt.date(2026, 10, 28)}),
+    ('28.10.2026 (YARIM)', set(), {dt.date(2026, 10, 28)}),
+    ('29.10.2026, 28.10.2026 (yarım)',
+     {dt.date(2026, 10, 29)}, {dt.date(2026, 10, 28)}),
+    ('', set(), set()),
+])
+def test_tatil_listesi_cozulur(metin, tam, yarim):
+    c_tam, c_yarim, hatali = hesaplama.tatil_listesi_coz(metin)
+    assert (c_tam, c_yarim, hatali) == (tam, yarim, [])
+
+
+def test_tatil_listesi_okunamayan_girdiyi_bildirir():
+    tam, yarim, hatali = hesaplama.tatil_listesi_coz('15.07.2026, abc, 29.10.2026')
+    assert tam == {dt.date(2026, 7, 15), dt.date(2026, 10, 29)}
+    assert hatali == ['abc']
+
+
+def test_tatil_listesi_gidis_donus_bozulmaz():
+    liste = hesaplama.donem_tatil_listesi((2026, 5))       # Kurban ayı
+    tam, yarim, hatali = hesaplama.tatil_listesi_coz(
+        hesaplama.tatil_listesi_metni(liste))
+    assert hatali == []
+    assert {(g, False) for g in tam} | {(g, True) for g in yarim} == set(liste)
 
 
 # ------------------------------------------------------ ayar dosyası
