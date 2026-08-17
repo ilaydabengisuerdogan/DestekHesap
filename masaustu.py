@@ -41,8 +41,8 @@ KOLON_GENISLIKLERI = {
     'Resmi Tatil Kesintisi': 130,
     'Kısmi Rapor Kesintisi': 130,
     'Toplam Kesinti': 100,
-    'Destek Gün': 90,
-    'Destek Saat': 90,
+    'Teşvik Gün Sayısı': 90,
+    'Teşvik Saat Sayısı': 90,
 }
 VARSAYILAN_GENISLIK = 150
 SOLA_YASLI = {'Şirket', 'Rapor Türü'}
@@ -626,7 +626,7 @@ class Uygulama(tk.Tk):
         raporlu = sonuc[sonuc['Rapor Durumu'] == 'Raporlu']
         self.metrikler["Toplam Personel"].config(text=f"{len(sonuc)}")
         self.metrikler["Raporlu Personel"].config(text=f"{len(raporlu)}")
-        self.metrikler["Toplam Destek Günü"].config(text=self._sayi(sonuc['Destek Gün'].sum()))
+        self.metrikler["Toplam Destek Günü"].config(text=self._sayi(sonuc['Teşvik Gün Sayısı'].sum()))
         self.metrikler["Toplam Kesinti"].config(text=self._sayi(sonuc['Toplam Kesinti'].sum()))
 
         if sonuc.attrs.get('sure_hesaplandi'):
@@ -758,7 +758,7 @@ def kendini_dogrula(girdi, cikti):
         raporlu = (sonuc['Rapor Durumu'] == 'Raporlu').sum()
         ayar_yolu = hesaplama.ayar_dosyasi_yolu()
         ozet = (f"TAMAM\ndonem={donem[0]}-{donem[1]:02d}\npersonel={len(sonuc)}\n"
-                f"raporlu={raporlu}\ntoplam_destek_gun={sonuc['Destek Gün'].sum():g}\n"
+                f"raporlu={raporlu}\ntoplam_destek_gun={sonuc['Teşvik Gün Sayısı'].sum():g}\n"
                 f"kesintili_personel={len(hesaplama.kesintili_personel(sonuc))}\n"
                 f"ayar_dosyasi={'okundu' if ayar_yolu.exists() else 'yok'}\n"
                 f"ayar_uyarisi={hesaplama.ayar_uyarisi or '-'}\n"

@@ -200,7 +200,7 @@ if veri is not None:
         with m2:
             st.metric("Raporlu Personel", f"{len(raporlu)} Kişi")
         with m3:
-            st.metric("Toplam Destek Günü", f"{sonuc['Destek Gün'].sum():,.1f} Gün")
+            st.metric("Toplam Destek Günü", f"{sonuc['Teşvik Gün Sayısı'].sum():,.1f} Gün")
         with m4:
             st.metric("Toplam Kesinti", f"{sonuc['Toplam Kesinti'].sum():,.1f} Gün")
 

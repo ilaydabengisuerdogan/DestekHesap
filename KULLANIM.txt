@@ -257,7 +257,7 @@ Belirleyici kriter, personelin o ay icinde SAGLIK RAPORU
   personelin yillik izni, yasal olarak hak edilmemis
   sayilir. Bu kayit, ayni donemde raporu olsa bile
   tesvikten dusulmez, "Uyari" kolonunda belirtilir ve
-  "Riskli" kolonunda Evet olarak isaretlenir.
+  "Risk" kolonunda Riskli olarak isaretlenir.
 
      Kidem              Yillik izin hakki
      0 - 1 yil          hak yok  (RISKLI)
@@ -287,7 +287,7 @@ Belirleyici kriter, personelin o ay icinde SAGLIK RAPORU
   dusmez. Ornek: 27-31 Temmuz haftasinin hafta sonu 1-2 Agustos
   oldugu icin Temmuz hesabina girmez.
 
-  Destek Saat = Destek Gun x 8
+  Tesvik Saat Sayisi = Tesvik Gun Sayisi x 8
 
 
   ORNEK 1
@@ -333,37 +333,49 @@ Belirleyici kriter, personelin o ay icinde SAGLIK RAPORU
   4. CIKTI DOSYASINDAKI KOLONLAR
 ----------------------------------------------------------------
 
-  (kimlik kolonu)               Calisan Numarasi veya Ad Soyad
-                                - dosyadaki adiyla gorunur
+Her personel icin BIR SATIR olusur. Bir personelin birden
+cok izni varsa izin bilgileri virgulle birlestirilir;
+baslangic ve bitis tarihleri ayni sirada yazilir.
+
+  ANA KOLONLAR
+  ......................................................
+  (kimlik kolonu)               Calisan Sicil Numarasi veya
+                                Ad Soyad - dosyadaki adiyla
+  Calisan Adi Soyadi            Dosyada varsa
   Sirket                        Bagli oldugu sirket
+  Izin Turu                     Personelin izin turleri
+  Izin Nedeni                   Izin nedenleri
+  Izin Baslangic Tarihi         Izin baslangic tarihleri
+  Izin Bitis Tarihi             Izin bitis tarihleri
+  Ise Baslama Tarihi            Dosyada varsa
+  Isten Cikis Tarihi            Dosyada varsa
+  TESVIK GUN SAYISI             Sonuc: hak edilen tesvik gunu
+  Kidem Yili                    Tamamlanmis kidem yili
+  Risk                          1 yilini doldurmadan yillik
+                                izin kullanilmissa "Riskli"
+
+     NOT: Kidem Yili ve Risk kolonlari yalnizca dosyada
+     "Ise Baslama Tarihi" varsa gorunur.
+
+  KESINTI KIRILIMI
+  ......................................................
   Donem                         Hesaplanan ay (orn. 2026-07)
-  Kidem (Yil)                   Tamamlanmis kidem yili
-  Yillik Izin Hakki             Kideme gore hak (14/20/26)
-  Riskli                        1 yilini doldurmadan yillik
-                                izin kullanilmissa "Evet"
-
-     NOT: Yukaridaki uc kolon yalnizca dosyada
-     "Ise Baslama Tarihi" varsa gorunur. Yoksa
-     hic gosterilmez, tabloyu kalabaliklastirmaz.
-
   Rapor Durumu                  Raporlu / Raporsuz
   Rapor Turu                    Hastalik Raporu vb.
-  Rapor Gun                     Rapor nedeniyle dusen is gunu
+  Rapor Gun                     Rapor nedeniyle dusen gun
   Hafta Sonu Kesintisi          Kaybedilen hafta sonu gunu
   Yillik Izin Kesintisi         Yillik izin nedeniyle dusen gun
   Resmi Tatil Kesintisi         Tatil nedeniyle dusen gun
+                                (arife 0,5 gun)
   Kismi Rapor Kesintisi         Saatlik raporlardan dusen gun
   Ucretsiz Izin Kesintisi       Ucretsiz izinden dusen gun
-  Tesvik Tabani                 Kac gun uzerinden hesaplandi
-                                (tam ay 30, kismi ayda daha az)
   Toplam Kesinti                Yukaridakilerin toplami
-  Destek Gun                    Tesvik Tabani - Toplam Kesinti
-  Destek Saat                   Destek Gun x 8
-  Uyari                         Tatil takvimi uyusmazligi veya
-                                kidem sarti notu
+  Tesvik Saat Sayisi            Tesvik Gun Sayisi x 8
+  Uyari                         Tatil takvimi notu, kidem sarti
+                                notu veya kismi donem bilgisi
 
-  Dosyada Ise Baslama Tarihi, Departman gibi ek kolonlar
-  varsa bunlar da kimligin yaninda cikti dosyasina tasinir.
+  Dosyadaki diger kolonlar (SGK, Izin Onay vb.) en sona
+  bilgi olarak eklenir.
 
 Kesinti kalemleri ayri ayri gosterildigi icin, teknopark
 denetiminde hangi kesintinin nereden geldigi izlenebilir.

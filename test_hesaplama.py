@@ -93,7 +93,7 @@ def test_gercek_veri_donem_tespiti():
 def test_gercek_veri_toplamlari(gercek_sonuc):
     assert len(gercek_sonuc) == GERCEK_PERSONEL_SAYISI
     assert (gercek_sonuc['Rapor Durumu'] == 'Raporlu').sum() == len(GERCEK_BEKLENEN)
-    assert gercek_sonuc['Destek Gün'].sum() == pytest.approx(GERCEK_TOPLAM_DESTEK)
+    assert gercek_sonuc['Teşvik Gün Sayısı'].sum() == pytest.approx(GERCEK_TOPLAM_DESTEK)
 
 
 @pytest.mark.parametrize('calisan, beklenen', sorted(GERCEK_BEKLENEN.items()))
@@ -105,13 +105,13 @@ def test_gercek_veri_raporlu_personel(gercek_sonuc, calisan, beklenen):
         satir_['Yıllık İzin Kesintisi'],
         satir_['Resmi Tatil Kesintisi'],
         satir_['Kısmi Rapor Kesintisi'],
-        satir_['Destek Gün'],
+        satir_['Teşvik Gün Sayısı'],
     ) == pytest.approx(beklenen)
 
 
 def test_gercek_veri_raporsuz_personel_tam_destek(gercek_sonuc):
     raporsuz = gercek_sonuc[gercek_sonuc['Rapor Durumu'] == 'Raporsuz']
-    assert (raporsuz['Destek Gün'] == hesaplama.TESVIK_TABAN_GUN).all()
+    assert (raporsuz['Teşvik Gün Sayısı'] == hesaplama.TESVIK_TABAN_GUN).all()
     assert (raporsuz['Toplam Kesinti'] == 0).all()
 
 
@@ -130,8 +130,8 @@ def test_gercek_veri_tatil_takvimi_tutarli(gercek_sonuc):
 
 
 def test_gercek_veri_kirilim_toplami_tutarli(gercek_sonuc):
-    assert (gercek_sonuc['Toplam Kesinti'] + gercek_sonuc['Destek Gün'] == hesaplama.TESVIK_TABAN_GUN).all()
-    assert (gercek_sonuc['Destek Saat'] == gercek_sonuc['Destek Gün'] * hesaplama.GUNLUK_SAAT).all()
+    assert (gercek_sonuc['Toplam Kesinti'] + gercek_sonuc['Teşvik Gün Sayısı'] == hesaplama.TESVIK_TABAN_GUN).all()
+    assert (gercek_sonuc['Teşvik Saat Sayısı'] == gercek_sonuc['Teşvik Gün Sayısı'] * hesaplama.GUNLUK_SAAT).all()
 
 
 # ------------------------------------------------------ 2) sentetik senaryolar
@@ -144,8 +144,8 @@ def test_raporsuz_personelde_hicbir_izin_dusmez():
     ])
     assert sonuc['Rapor Durumu'] == 'Raporsuz'
     assert sonuc['Toplam Kesinti'] == 0
-    assert sonuc['Destek Gün'] == 30
-    assert sonuc['Destek Saat'] == 240
+    assert sonuc['Teşvik Gün Sayısı'] == 30
+    assert sonuc['Teşvik Saat Sayısı'] == 240
 
 
 def test_dogum_istirahati_de_rapor_sayilir():
@@ -160,7 +160,7 @@ def test_tek_gunluk_rapor_hafta_sonu_ve_resmi_tatili_dusurur():
     assert sonuc['Rapor Gün'] == 1
     assert sonuc['Hafta Sonu Kesintisi'] == 2
     assert sonuc['Resmi Tatil Kesintisi'] == 1
-    assert sonuc['Destek Gün'] == 26
+    assert sonuc['Teşvik Gün Sayısı'] == 26
 
 
 def test_rapor_her_degdigi_haftanin_hafta_sonunu_dusurur():
@@ -235,8 +235,8 @@ def test_raporluda_mazeret_ve_evlilik_izni_dusmez(izin_turu, nedeni, gun):
 
 def test_tam_ay_rapor_destek_sifira_dusmez_negatife():
     sonuc = hesapla([rapor(1, '2026-07-01', '2026-07-31', 22)])
-    assert sonuc['Destek Gün'] == 0
-    assert sonuc['Destek Saat'] == 0
+    assert sonuc['Teşvik Gün Sayısı'] == 0
+    assert sonuc['Teşvik Saat Sayısı'] == 0
 
 
 # ------------------------------------------- ücretsiz izin ve kıdem şartı
@@ -247,7 +247,7 @@ def test_ucretsiz_izin_raporsuz_personelde_de_duser():
                            'Kişisel Nedenler')])
     assert sonuc['Rapor Durumu'] == 'Raporsuz'
     assert sonuc['Ücretsiz İzin Kesintisi'] == 5
-    assert sonuc['Destek Gün'] == 25
+    assert sonuc['Teşvik Gün Sayısı'] == 25
 
 
 def test_ucretsiz_izin_resmi_tatili_kapsamaz():
@@ -255,7 +255,7 @@ def test_ucretsiz_izin_resmi_tatili_kapsamaz():
     sonuc = hesapla([satir(1, 'Ücretsiz İzin', '2026-07-13', '2026-07-24', 9,
                            'Kişisel Nedenler')])
     assert sonuc['Ücretsiz İzin Kesintisi'] == 9
-    assert sonuc['Destek Gün'] == 21
+    assert sonuc['Teşvik Gün Sayısı'] == 21
 
 
 def test_ucretsiz_izin_raporla_birlikte_mukerrer_sayilmaz():
@@ -371,13 +371,12 @@ def test_isten_cikis_ornegi_1002():
                        'Ücretli Yıllık İzin'),
                  ise='2020-01-01', cikis='2026-07-17'),
     ])
-    assert sonuc['Teşvik Tabanı'] == 17
     assert sonuc['Rapor Gün'] == 2
     assert sonuc['Hafta Sonu Kesintisi'] == 2
     assert sonuc['Yıllık İzin Kesintisi'] == 2      # 15 Temmuz resmi tatilde sayılır
     assert sonuc['Resmi Tatil Kesintisi'] == 1
     assert sonuc['Toplam Kesinti'] == 7
-    assert sonuc['Destek Gün'] == 10
+    assert sonuc['Teşvik Gün Sayısı'] == 10
 
 
 def test_cikis_tarihi_yoksa_taban_30():
@@ -387,9 +386,8 @@ def test_cikis_tarihi_yoksa_taban_30():
         _tarihli(satir(1002, 'Yıllık İzin', '2026-07-13', '2026-07-15', 3,
                        'Ücretli Yıllık İzin'), ise='2020-01-01'),
     ])
-    assert sonuc['Teşvik Tabanı'] == 30
     assert sonuc['Toplam Kesinti'] == 7
-    assert sonuc['Destek Gün'] == 23
+    assert sonuc['Teşvik Gün Sayısı'] == 23
 
 
 def test_cikis_sonrasi_gunler_kesintiye_girmez():
@@ -401,11 +399,10 @@ def test_cikis_sonrasi_gunler_kesintiye_girmez():
         _tarihli(satir(1, 'Yıllık İzin', '2026-07-20', '2026-07-21', 2),
                  ise='2020-01-01', cikis='2026-07-10'),
     ])
-    assert sonuc['Teşvik Tabanı'] == 10
     assert sonuc['Yıllık İzin Kesintisi'] == 0      # 20-21 Temmuz kapsam dışı
     assert sonuc['Hafta Sonu Kesintisi'] == 0       # 11-12 Temmuz kapsam dışı
     assert sonuc['Resmi Tatil Kesintisi'] == 0      # 15 Temmuz kapsam dışı
-    assert sonuc['Destek Gün'] == 8                 # 10 - 2 rapor
+    assert sonuc['Teşvik Gün Sayısı'] == 8                 # 10 - 2 rapor
 
 
 def test_kismi_donemde_uyari_verilir():
@@ -420,8 +417,7 @@ def test_donemde_hic_calismayan_personel():
     sonuc = hesapla([
         _tarihli(rapor(1, '2026-07-07', '2026-07-08', 2), cikis='2026-06-15'),
     ])
-    assert sonuc['Teşvik Tabanı'] == 0
-    assert sonuc['Destek Gün'] == 0
+    assert sonuc['Teşvik Gün Sayısı'] == 0
     assert 'çalışmıyor' in sonuc['Uyarı']
 
 
@@ -544,17 +540,15 @@ def test_kidem_yili_hesabi():
 def test_kidemsiz_yillik_izin_riskli_isaretlenir():
     """Raporsuz olsa bile İK'nın görmesi için işaretlenir."""
     sonuc = hesapla([_kidem_satiri('2026-03-02')])
-    assert sonuc['Riskli'] == 'Evet'
-    assert sonuc['Kıdem (Yıl)'] == 0
-    assert sonuc['Yıllık İzin Hakkı'] == 0
-    assert sonuc['Destek Gün'] == 30      # raporsuz, kesinti yok
+    assert sonuc['Risk'] == 'Riskli'
+    assert sonuc['Kıdem Yılı'] == 0
+    assert sonuc['Teşvik Gün Sayısı'] == 30      # raporsuz, kesinti yok
 
 
 def test_kidemli_personel_riskli_isaretlenmez():
     sonuc = hesapla([_kidem_satiri('2015-07-01')])
-    assert sonuc['Riskli'] == ''
-    assert sonuc['Kıdem (Yıl)'] == 11
-    assert sonuc['Yıllık İzin Hakkı'] == 20
+    assert sonuc['Risk'] == ''
+    assert sonuc['Kıdem Yılı'] == 11
 
 
 def test_ise_baslama_yoksa_kidem_kolonlari_hic_gorunmez():
@@ -572,7 +566,7 @@ def test_ise_baslama_varsa_kidem_kolonlari_gorunur():
         pd.DataFrame([_kidem_satiri('2015-07-01')]), TEMMUZ, TATILLER)
     for kolon in hesaplama.KIDEM_KOLONLARI:
         assert kolon in sonuc.columns
-    assert sonuc['Kıdem (Yıl)'].iloc[0] == 11
+    assert sonuc['Kıdem Yılı'].iloc[0] == 11
 
 
 def test_kidem_kolonlari_kismen_doluysa_korunur():
@@ -582,11 +576,48 @@ def test_kidem_kolonlari_kismen_doluysa_korunur():
         satir(2, 'Yıllık İzin', '2026-07-20', '2026-07-21', 2),
     ]
     sonuc = hesaplama.hesapla(pd.DataFrame(kayitlar), TEMMUZ, TATILLER)
-    assert 'Kıdem (Yıl)' in sonuc.columns
-    assert sorted(sonuc['Kıdem (Yıl)'].astype(str)) == ['', '11']
+    assert 'Kıdem Yılı' in sonuc.columns
+    assert sorted(sonuc['Kıdem Yılı'].astype(str)) == ['', '11']
 
 
 # ---------------------------------------------- çok yıllı resmi tatil takvimi
+
+def test_takvim_araligi_bugune_gore_kayar():
+    """
+    Sabit bir son yıl yazılırsa o yıl gelince takvim sessizce boşalır.
+    Aralık bugünden ileriye doğru kaymalı.
+    """
+    bu_yil = dt.date.today().year
+    assert hesaplama.takvim_son_yil() >= bu_yil + 20
+    yillar = {g.year for g in hesaplama.RESMI_TATILLER}
+    assert bu_yil + 15 in yillar
+
+
+@pytest.mark.parametrize('yil', [2041, 2060, 2099])
+def test_takvim_araligi_disindaki_yil_da_calisir(yil):
+    """Önceden üretilen aralığın dışında da tatiller bulunmalı."""
+    tatiller = hesaplama.donem_tatilleri((yil, 7))
+    assert dt.date(yil, 7, 15) in tatiller
+
+    liste = hesaplama.donem_tatil_listesi((yil, 10))
+    assert (dt.date(yil, 10, 29), False) in liste
+    assert (dt.date(yil, 10, 28), True) in liste
+
+
+def test_uzak_yilda_hesap_tatilsiz_kalmaz():
+    """2099 dönemi için 15 Temmuz yine resmi tatil kesintisi yaratmalı."""
+    sonuc = hesaplama.hesapla(
+        pd.DataFrame([rapor(1, '2099-07-09', '2099-07-09', 1)]), (2099, 7)).iloc[0]
+    assert sonuc['Resmi Tatil Kesintisi'] >= 1
+
+
+def test_kullanicinin_sildigi_tatil_geri_eklenmez():
+    """Arayüzden tatil çıkarıldığında program onu geri koymamalı."""
+    sonuc = hesaplama.hesapla(
+        pd.DataFrame([rapor(1, '2026-07-09', '2026-07-09', 1)]),
+        TEMMUZ, set(), set()).iloc[0]
+    assert sonuc['Resmi Tatil Kesintisi'] == 0
+
 
 def test_takvim_gelecek_yillari_kapsar():
     """Uygulama yıllarca kullanılacak; hiçbir yıl tatilsiz kalmamalı."""
@@ -735,7 +766,7 @@ def test_ayar_dosyasi_yuklendikten_sonra_hesap_calisir(tmp_path):
         # Yüklemeden sonra tam bir hesap koşabilmeli
         sonuc = hesaplama.hesapla(
             pd.DataFrame([rapor(1, '2026-07-09', '2026-07-09', 1)]), TEMMUZ)
-        assert sonuc['Destek Gün'].iloc[0] > 0
+        assert sonuc['Teşvik Gün Sayısı'].iloc[0] > 0
     finally:
         hesaplama.DOGRULANMIS_DINI_BAYRAMLAR = onceki_bayram
         hesaplama.RESMI_TATILLER = onceki_tam
@@ -918,7 +949,7 @@ def test_kullanici_ornegi():
     ])
     # 0,5 gün eksik çalışma + 2 gün hafta sonu (11-12) + 2 gün yıllık izin + 1 gün 15 Temmuz
     assert sonuc['Toplam Kesinti'] == 5.5
-    assert sonuc['Destek Gün'] == 24.5
+    assert sonuc['Teşvik Gün Sayısı'] == 24.5
 
 
 def test_resmi_tatil_hafta_sonuna_denk_gelirse_sayilmaz():
@@ -1020,9 +1051,10 @@ def test_ek_kolonlar_ciktiya_tasinir(tmp_path):
 
     assert sonuc['Sicil No'].iloc[0] == 'S-4471'
     assert sonuc['Departman'].iloc[0] == 'Ar-Ge'
-    # Bilgi kolonları kimliğin hemen yanında olmalı.
-    assert list(sonuc.columns)[:3] == ['Çalışan Numarası', 'Sicil No', 'Departman']
-    assert sonuc['Destek Gün'].iloc[0] == 26
+    # Kimlik başta; ad soyad dışındaki bilgi kolonları sonda toplanır.
+    assert list(sonuc.columns)[0] == 'Çalışan Numarası'
+    assert set(list(sonuc.columns)[-2:]) == {'Sicil No', 'Departman'}
+    assert sonuc['Teşvik Gün Sayısı'].iloc[0] == 26
 
 
 def test_ek_kolon_satirdan_satira_degisirse_hepsi_gosterilir(tmp_path):
@@ -1048,7 +1080,7 @@ def test_esanlamli_kolon_adlari_taninir(tmp_path):
     assert sonuc.columns[0] == 'Sicil No'
     assert sonuc['Sicil No'].iloc[0] == 1
     assert sonuc['Rapor Durumu'].iloc[0] == 'Raporlu'
-    assert sonuc['Destek Gün'].iloc[0] == 26
+    assert sonuc['Teşvik Gün Sayısı'].iloc[0] == 26
 
 
 def test_ad_soyad_kimlik_olarak_kabul_edilir(tmp_path):
@@ -1060,7 +1092,7 @@ def test_ad_soyad_kimlik_olarak_kabul_edilir(tmp_path):
     sonuc = hesaplama.hesapla(veri, TEMMUZ, TATILLER)
     assert sonuc.columns[0] == 'Ad Soyad'
     assert sonuc['Ad Soyad'].iloc[0] == 'Ayşe Yılmaz'
-    assert sonuc['Destek Gün'].iloc[0] == 26
+    assert sonuc['Teşvik Gün Sayısı'].iloc[0] == 26
 
 
 def test_calisan_numarasi_ad_soyada_tercih_edilir(tmp_path):
@@ -1088,7 +1120,7 @@ def test_elle_eslestirme_taninmayan_kolonlari_cozer(tmp_path):
             'Adet': 'quantityInDays', 'Sure': 'quantityInHours', 'Birim': 'Şirket'}
     sonuc = hesaplama.hesapla(hesaplama.oku(yol, elle), TEMMUZ, TATILLER)
     assert sonuc.columns[0] == 'KOD'
-    assert sonuc['Destek Gün'].iloc[0] == 26
+    assert sonuc['Teşvik Gün Sayısı'].iloc[0] == 26
 
 
 def test_ik_sistem_ciktisi_formati_taninir(tmp_path):
@@ -1112,7 +1144,7 @@ def test_ik_sistem_ciktisi_formati_taninir(tmp_path):
 
     sonuc = hesaplama.hesapla(hesaplama.oku(yol), TEMMUZ, TATILLER)
     assert sonuc.columns[0] == 'Çalışan Sicil'
-    assert sonuc['Destek Gün'].iloc[0] == 26
+    assert sonuc['Teşvik Gün Sayısı'].iloc[0] == 26
     # 'İzne Esas Tarihi' ve 'Çıkış Tarihi' kendi rollerinde tanınır
     assert hesaplama.ISE_BASLAMA_KOLONU in sonuc.columns
     assert hesaplama.CIKIS_KOLONU in sonuc.columns
@@ -1163,7 +1195,7 @@ def test_hesaplanan_sureler_dosyadakiyle_ayni_sonucu_verir(tmp_path):
                            'siz.xlsx')),
         TEMMUZ, TATILLER)
 
-    assert ile['Destek Gün'].iloc[0] == siz['Destek Gün'].iloc[0]
+    assert ile['Teşvik Gün Sayısı'].iloc[0] == siz['Teşvik Gün Sayısı'].iloc[0]
     assert ile.attrs.get('sure_hesaplandi') is False
     assert siz.attrs.get('sure_hesaplandi') is True
 
@@ -1222,11 +1254,58 @@ def test_izne_esas_tarihi_kidem_hesabinda_kullanilir(tmp_path):
     yol = _yaz(tmp_path, kayitlar, kolon_adlari={KIMLIK: 'Çalışan Sicil'})
 
     sonuc = hesaplama.hesapla(hesaplama.oku(yol), TEMMUZ, TATILLER)
-    assert sonuc['Kıdem (Yıl)'].iloc[0] == 0
-    assert sonuc['Riskli'].iloc[0] == 'Evet'
+    assert sonuc['Kıdem Yılı'].iloc[0] == 0
+    assert sonuc['Risk'].iloc[0] == 'Riskli'
     # Kıdem şartı dolmadığı için yıllık izin düşmez
     assert sonuc['Yıllık İzin Kesintisi'].iloc[0] == 0
     assert 'kıdem' in sonuc['Uyarı'].iloc[0]
+
+
+def test_cikti_kolon_sirasi_istenen_bicimde(tmp_path):
+    """İK'nın istediği çıktı biçimi: kimlik, ad soyad, sonra kural kolonları."""
+    kayit = rapor(1, '2026-07-09', '2026-07-09', 1)
+    kayit.update({'Çalışan Adı Soyadı': 'Ayşe Yılmaz', 'SGK': 'Gebze Bilişim Vadisi',
+                  hesaplama.ISE_BASLAMA_KOLONU: pd.Timestamp('2020-01-15'),
+                  hesaplama.CIKIS_KOLONU: None})
+    yol = _yaz(tmp_path, [kayit], kolon_adlari={KIMLIK: 'Çalışan Sicil Numarası'})
+    kolonlar = list(hesaplama.hesapla(hesaplama.oku(yol), TEMMUZ, TATILLER).columns)
+
+    assert kolonlar[:11] == [
+        'Çalışan Sicil Numarası', 'Çalışan Adı Soyadı', 'Şirket',
+        'İzin Türü', 'İzin Nedeni', 'İzin Başlangıç Tarihi', 'İzin Bitiş Tarihi',
+        hesaplama.ISE_BASLAMA_KOLONU, hesaplama.CIKIS_KOLONU,
+        'Teşvik Gün Sayısı', 'Kıdem Yılı',
+    ]
+    assert kolonlar[11] == 'Risk'
+    # Tanınmayan bilgi kolonları sona gider
+    assert kolonlar[-1] == 'SGK'
+    # Kaldırılan kolonlar çıktıda olmamalı
+    assert 'Teşvik Tabanı' not in kolonlar
+    assert 'Yıllık İzin Hakkı' not in kolonlar
+
+
+def test_birden_cok_izin_tek_satirda_birlestirilir(tmp_path):
+    """Personel başına bir satır; izin bilgileri aynı sırada birleştirilir."""
+    kayitlar = [
+        rapor(1, '2026-07-09', '2026-07-10', 2),
+        satir(1, 'Yıllık İzin', '2026-07-20', '2026-07-21', 2, 'Ücretli Yıllık İzin'),
+    ]
+    sonuc = hesaplama.hesapla(hesaplama.oku(_yaz(tmp_path, kayitlar)), TEMMUZ, TATILLER)
+    assert len(sonuc) == 1
+    r = sonuc.iloc[0]
+    assert r['İzin Türü'] == 'Şirket Dışında Olma Nedeni, Yıllık İzin'
+    assert r['İzin Nedeni'] == 'Hastalık Raporu, Ücretli Yıllık İzin'
+    assert r['İzin Başlangıç Tarihi'] == '09.07.2026, 20.07.2026'
+    assert r['İzin Bitiş Tarihi'] == '10.07.2026, 21.07.2026'
+
+
+def test_baslik_bosluklari_temizlenir(tmp_path):
+    """'İzin Onay ' gibi sondaki boşluk kolon adını bozmamalı."""
+    kayit = rapor(1, '2026-07-09', '2026-07-09', 1)
+    kayit['İzin Onay '] = 'APPROVED'
+    sonuc = hesaplama.hesapla(hesaplama.oku(_yaz(tmp_path, [kayit])), TEMMUZ, TATILLER)
+    assert 'İzin Onay' in sonuc.columns
+    assert 'İzin Onay ' not in sonuc.columns
 
 
 def test_buyuk_kucuk_harf_ve_bosluk_farki_onemsiz(tmp_path):
@@ -1244,7 +1323,7 @@ def test_baslik_ustunde_blok_varsa_bulunur(tmp_path):
     veri = hesaplama.oku(yol)
     assert list(veri.columns)[:6] == hesaplama.KOLONLAR
     assert len(veri) == 1
-    assert hesaplama.hesapla(veri, TEMMUZ, TATILLER)['Destek Gün'].iloc[0] == 26
+    assert hesaplama.hesapla(veri, TEMMUZ, TATILLER)['Teşvik Gün Sayısı'].iloc[0] == 26
 
 
 def test_veri_sayfasi_cok_sayfali_dosyada_bulunur(tmp_path):
@@ -1259,7 +1338,7 @@ def test_veri_sayfasi_cok_sayfali_dosyada_bulunur(tmp_path):
 
     veri = hesaplama.oku(yol)
     assert len(veri) == 1
-    assert hesaplama.hesapla(veri, TEMMUZ, TATILLER)['Destek Gün'].iloc[0] == 26
+    assert hesaplama.hesapla(veri, TEMMUZ, TATILLER)['Teşvik Gün Sayısı'].iloc[0] == 26
 
 
 def test_ise_baslama_tarihi_okunabilir_bicimde_tasinir(tmp_path):

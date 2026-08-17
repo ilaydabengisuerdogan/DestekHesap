@@ -54,18 +54,46 @@ ISTEGE_BAGLI_KOLONLAR = SURE_KOLONLARI + [ISE_BASLAMA_KOLONU, CIKIS_KOLONU]
 
 # Yalnızca İşe Başlama Tarihi varsa doldurulabilen çıktı kolonları.
 # Hiçbir personelde değer yoksa çıktıdan tamamen çıkarılır.
-KIDEM_KOLONLARI = ['Kıdem (Yıl)', 'Yıllık İzin Hakkı', 'Riskli']
+KIDEM_KOLONLARI = ['Kıdem Yılı', 'Risk']
+
+# Çıktı Excel'inde kolon sırası. Baştaki kimlik ve bilgi kolonları (Ad Soyad,
+# SGK vb.) dosyadaki adlarıyla geldiği için burada yer almaz; onlar en başta
+# kalır. Listede olmayan kolonlar sona eklenir.
+CIKTI_KOLON_SIRASI = [
+    'Şirket',
+    'İzin Türü', 'İzin Nedeni',
+    'İzin Başlangıç Tarihi', 'İzin Bitiş Tarihi',
+    ISE_BASLAMA_KOLONU, CIKIS_KOLONU,
+    'Teşvik Gün Sayısı', 'Kıdem Yılı', 'Risk',
+    # --- kesinti kırılımı ---
+    'Dönem', 'Rapor Durumu', 'Rapor Türü',
+    'Rapor Gün', 'Hafta Sonu Kesintisi', 'Yıllık İzin Kesintisi',
+    'Resmi Tatil Kesintisi', 'Kısmi Rapor Kesintisi', 'Ücretsiz İzin Kesintisi',
+    'Toplam Kesinti', 'Teşvik Saat Sayısı',
+    'Uyarı',
+]
+
+# Hesapta kullanılan ama çıktıda gösterilmeyen kolonlar. Teşvik tabanı tam ay
+# çalışanda hep 30 çıktığı ve kısmi ayda değiştiği için tabloyu karıştırıyordu;
+# bilgi zaten 'Uyarı' kolonunda veriliyor.
+CIKTIDA_GIZLENEN = ['Teşvik Tabanı']
+
+# Kimliğin hemen yanında durması istenen bilgi kolonları (normalize edilmiş
+# adında bu ifadelerden biri geçenler). Diğer tanınmayan kolonlar sona gider.
+KIMLIK_YANI_IFADELER = ['ad soyad', 'adi soyadi', 'isim', 'name']
 
 # Kolon adı farklılıklarına tolerans. Birebir eşleşme bulunamazsa bu adlar
 # denenir; büyük/küçük harf, Türkçe karakter ve noktalama farkları önemsizdir.
 # Kimlik için önce numara alanları, bulunamazsa ad soyad alanları denenir.
 KOLON_ESANLAMLILARI = {
-    KIMLIK_KOLONU: ['Çalışan Numarası', 'Çalışan Sicil', 'Çalışan Sicil No', 'Sicil',
-                    'Sicil No', 'Sicil Numarası', 'Personel No', 'Personel Sicil',
-                    'Personel Numarası', 'Çalışan No', 'Employee Id', 'Employee Number',
+    KIMLIK_KOLONU: ['Çalışan Numarası', 'Çalışan Sicil Numarası', 'Çalışan Sicil',
+                    'Çalışan Sicil No', 'Sicil', 'Sicil No', 'Sicil Numarası',
+                    'Personel No', 'Personel Sicil', 'Personel Numarası',
+                    'Çalışan No', 'Employee Id', 'Employee Number',
                     'TC', 'TC Kimlik No',
-                    'Ad Soyad', 'Adı Soyadı', 'Ad ve Soyad', 'İsim', 'Personel Adı',
-                    'Çalışan Adı', 'Ad-Soyad', 'Full Name', 'Employee Name'],
+                    'Ad Soyad', 'Adı Soyadı', 'Çalışan Adı Soyadı', 'Ad ve Soyad',
+                    'İsim', 'Personel Adı', 'Çalışan Adı', 'Ad-Soyad',
+                    'Full Name', 'Employee Name'],
     'Şirket': ['Firma', 'Şirket Adı', 'Company'],
     'İzin Türü': ['İzin Tipi', 'Devamsızlık Tipi', 'Leave Type'],
     'İzin Nedeni': ['İzin Neden', 'İzin Sebebi', 'Neden', 'Açıklama', 'Leave Reason'],
@@ -158,9 +186,15 @@ DOGRULANMIS_DINI_BAYRAMLAR = {
     2026: {'ramazan': (3, 20), 'kurban': (5, 27)},
 }
 
-# Takvimin önceden hesaplanacağı yıl aralığı.
+# Takvimin önceden hesaplanacağı yıl aralığı. Üst sınır bugüne göre kayar;
+# sabit bir yıl yazılırsa o yıl geldiğinde takvim sessizce boşalır.
 TAKVIM_ILK_YIL = 2020
-TAKVIM_SON_YIL = 2040
+TAKVIM_ILERI_YIL = 25          # bugünden kaç yıl ileriye kadar üretilsin
+
+
+def takvim_son_yil():
+    """Takvimin kapsayacağı son yıl (bugünden ileriye doğru kayar)."""
+    return dt.date.today().year + TAKVIM_ILERI_YIL
 
 
 class GirdiHatasi(Exception):
@@ -261,7 +295,7 @@ def takvim_uret(ilk_yil=None, son_yil=None):
     Döner: (tam gün tatiller, yarım gün tatiller)
     """
     ilk_yil = ilk_yil or TAKVIM_ILK_YIL
-    son_yil = son_yil or TAKVIM_SON_YIL
+    son_yil = son_yil or takvim_son_yil()
     tam, yarim = set(), set()
     for yil in range(ilk_yil, son_yil + 1):
         t, y, _ = resmi_tatiller_yil(yil, yarim_dahil=True)
@@ -554,10 +588,24 @@ def donem_sinirlari(donem):
     return dt.date(yil, ay, 1), dt.date(yil, ay, calendar.monthrange(yil, ay)[1])
 
 
+def _yil_takvimi(yil, tatiller=None, yarim_tatiller=None):
+    """
+    Bir yılın tatilleri. Açıkça küme verilmediyse o yıl için üretilir.
+
+    Önceden hesaplanmış kümeye güvenmek yerine yılı doğrudan üretmek,
+    takvim aralığının dışına çıkıldığında sessizce "hiç tatil yok"
+    durumuna düşmeyi engeller.
+    """
+    if tatiller is None and yarim_tatiller is None:
+        tam, yarim, _ = resmi_tatiller_yil(yil, yarim_dahil=True)
+        return tam, yarim
+    return (set(tatiller or ()), set(yarim_tatiller or ()))
+
+
 def donem_tatilleri(donem, tatiller=None):
     """Dönem ayına düşen TAM GÜN resmi tatilleri sıralı liste olarak döner."""
     ilk, son = donem_sinirlari(donem)
-    kaynak = RESMI_TATILLER if tatiller is None else tatiller
+    kaynak = _yil_takvimi(donem[0], tatiller)[0] if tatiller is None else tatiller
     return sorted(g for g in kaynak if ilk <= g <= son)
 
 
@@ -572,8 +620,7 @@ def donem_tatil_listesi(donem, tatiller=None, yarim_tatiller=None):
     Arayüzdeki tatil kutusu bunu kullanır; arife günleri de görünsün diye.
     """
     ilk, son = donem_sinirlari(donem)
-    tam = RESMI_TATILLER if tatiller is None else tatiller
-    yarim = YARIM_GUN_TATILLER if yarim_tatiller is None else yarim_tatiller
+    tam, yarim = _yil_takvimi(donem[0], tatiller, yarim_tatiller)
     liste = [(g, False) for g in tam if ilk <= g <= son]
     liste += [(g, True) for g in yarim if ilk <= g <= son and g not in tam]
     return sorted(liste)
@@ -803,8 +850,9 @@ def oku(kaynak, elle_eslesme=None):
     except Exception as hata:
         raise GirdiHatasi(f"Excel dosyası okunamadı: {hata}") from hata
 
-    # Adsız/boş kolonları at, başlıkları beklenen adlara eşle.
+    # Adsız/boş kolonları at, başlıklardaki fazla boşluğu temizle.
     df = df.loc[:, [k for k in df.columns if not str(k).startswith('Unnamed:')]]
+    df = df.rename(columns={k: str(k).strip() for k in df.columns})
     eslesme = _kolonlari_esle(df.columns)
     if elle_eslesme:
         # Kullanıcının eşleştirmesi otomatik tanımanın önüne geçer.
@@ -1077,18 +1125,30 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None,
     yillik_izinli_mi = any(deger_iceriyor(s['İzin Türü'], KESINTI_IZIN_TURLERI)
                            for s, _, _ in diger_satirlar)
 
+    def _birlestir(degerler):
+        """Personelin birden çok izni varsa değerleri okunur biçimde birleştirir."""
+        tekil = [d for d in dict.fromkeys(degerler) if d]
+        return ", ".join(tekil)[:250]
+
     sonuc = {(kimlik_ad or KIMLIK_KOLONU): satirlar[KIMLIK_KOLONU].iloc[0]}
-    # Bilgi kolonları (Sicil No, Departman vb.) kimliğin hemen yanında.
+    # Bilgi kolonları (Ad Soyad, SGK, Departman vb.) kimliğin hemen yanında.
     for kolon in ek_kolonlar:
         sonuc[kolon] = _ek_kolon_degeri(satirlar, kolon)
     sonuc.update({
         'Şirket': satirlar['Şirket'].iloc[0],
+        # İzin bilgileri personel başına birleştirilir; başlangıç ve bitiş
+        # tarihleri aynı sırada yazılır, böylece karşılıklı okunabilir.
+        'İzin Türü': _birlestir(satirlar['İzin Türü']),
+        'İzin Nedeni': _birlestir(satirlar['İzin Nedeni']),
+        'İzin Başlangıç Tarihi': _birlestir(
+            satirlar['İzin Başlangıç Tarihi'].dt.strftime('%d.%m.%Y')),
+        'İzin Bitiş Tarihi': _birlestir(
+            satirlar['İzin Bitiş Tarihi'].dt.strftime('%d.%m.%Y')),
         'Dönem': f"{donem[0]}-{donem[1]:02d}",
-        'Kıdem (Yıl)': '' if kidem is None else kidem,
-        'Yıllık İzin Hakkı': '' if hak is None else hak,
+        'Kıdem Yılı': '' if kidem is None else kidem,
         # 1 yılını doldurmamış personelin yıllık izin kaydı yasal olarak hak
         # edilmemiştir; İK'nın gözden geçirmesi için işaretlenir.
-        'Riskli': 'Evet' if (kidem is not None and kidem < 1 and yillik_izinli_mi) else '',
+        'Risk': 'Riskli' if (kidem is not None and kidem < 1 and yillik_izinli_mi) else '',
         'Rapor Durumu': 'Raporlu' if rapor_satirlari else 'Raporsuz',
         'Rapor Türü': ', '.join(sorted({s['İzin Nedeni'] for s, _, _ in rapor_satirlari})),
         'Rapor Gün': 0.0,
@@ -1099,8 +1159,8 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None,
         'Ücretsiz İzin Kesintisi': 0.0,
         'Teşvik Tabanı': float(taban),
         'Toplam Kesinti': 0.0,
-        'Destek Gün': float(taban),
-        'Destek Saat': float(taban * GUNLUK_SAAT),
+        'Teşvik Gün Sayısı': float(taban),
+        'Teşvik Saat Sayısı': float(taban * GUNLUK_SAAT),
         'Uyarı': '',
     })
 
@@ -1129,8 +1189,8 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None,
         sonuc.update({
             'Ücretsiz İzin Kesintisi': toplam,
             'Toplam Kesinti': toplam,
-            'Destek Gün': destek,
-            'Destek Saat': destek * GUNLUK_SAAT,
+            'Teşvik Gün Sayısı': destek,
+            'Teşvik Saat Sayısı': destek * GUNLUK_SAAT,
             'Uyarı': ' | '.join(uyarilar),
         })
         return sonuc
@@ -1228,8 +1288,8 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None,
         'Kısmi Rapor Kesintisi': kismi_kesinti,
         'Ücretsiz İzin Kesintisi': float(ucretsiz_kesintisi),
         'Toplam Kesinti': float(toplam_kesinti),
-        'Destek Gün': destek_gun,
-        'Destek Saat': destek_gun * GUNLUK_SAAT,
+        'Teşvik Gün Sayısı': destek_gun,
+        'Teşvik Saat Sayısı': destek_gun * GUNLUK_SAAT,
         'Uyarı': ' | '.join(uyarilar),
     })
     return sonuc
@@ -1245,8 +1305,17 @@ def hesapla(df, donem=None, tatiller=None, yarim_tatiller=None):
     """
     if donem is None:
         donem = donem_tespit(df)
-    tatiller = set(RESMI_TATILLER if tatiller is None else tatiller)
-    yarim_tatiller = set(YARIM_GUN_TATILLER if yarim_tatiller is None else yarim_tatiller)
+    # Takvim verilmediyse dönemin yılı doğrudan üretilir; önceden hesaplanan
+    # aralığın dışına çıkıldığında sessizce tatilsiz hesaplamamak için.
+    # Kullanıcı açıkça takvim verdiyse (arayüzden düzenlemişse) ona dokunulmaz.
+    if tatiller is None and yarim_tatiller is None:
+        tatiller, yarim_tatiller = _yil_takvimi(donem[0])
+        tatiller = set(tatiller) | set(RESMI_TATILLER)
+        yarim_tatiller = set(yarim_tatiller) | set(YARIM_GUN_TATILLER)
+    else:
+        tatiller = set(RESMI_TATILLER if tatiller is None else tatiller)
+        yarim_tatiller = set(
+            YARIM_GUN_TATILLER if yarim_tatiller is None else yarim_tatiller)
     yarim_tatiller -= tatiller
 
     # Süre kolonları dosyada yoksa tarihlerden üretilir.
@@ -1267,14 +1336,39 @@ def hesapla(df, donem=None, tatiller=None, yarim_tatiller=None):
 
     # Kıdeme bağlı kolonlar yalnızca İşe Başlama Tarihi varsa anlamlıdır.
     # Hiçbir personelde kıdem bilgisi yoksa üçü birlikte kaldırılır; kıdem
-    # biliniyorsa boş 'Riskli' de anlamlıdır ("riskli kayıt yok") ve kalır.
+    # biliniyorsa boş 'Risk' de anlamlıdır ("riskli kayıt yok") ve kalır.
     kidem_kolonu = KIDEM_KOLONLARI[0]
     if kidem_kolonu in sonuc_df.columns and (sonuc_df[kidem_kolonu] == '').all():
         sonuc_df = sonuc_df.drop(columns=[k for k in KIDEM_KOLONLARI
                                           if k in sonuc_df.columns])
 
+    sonuc_df = sonuc_df.drop(columns=[k for k in CIKTIDA_GIZLENEN
+                                      if k in sonuc_df.columns])
+    sonuc_df = sonuc_df[_kolonlari_sirala(sonuc_df.columns)]
     sonuc_df.attrs['sure_hesaplandi'] = sure_hesaplandi
     return sonuc_df
+
+
+def _kolonlari_sirala(kolonlar):
+    """
+    Çıktı kolonlarını istenen sıraya dizer.
+
+    Kimlik ve bilgi kolonları (Ad Soyad, SGK vb.) dosyadaki adlarıyla geldiği
+    için CIKTI_KOLON_SIRASI'nda yer almaz; onlar baştaki sıralarını korur.
+    """
+    kolonlar = list(kolonlar)
+    bilinen = [k for k in CIKTI_KOLON_SIRASI if k in kolonlar]
+    taninmayan = [k for k in kolonlar if k not in bilinen]
+
+    # Kimlik kolonu (ilk sıradaki) ve ad soyad gibi tanımlayıcı bilgiler başta.
+    bastakiler = taninmayan[:1]
+    for kolon in taninmayan[1:]:
+        norm = _normalize_baslik(kolon)
+        if any(ifade in norm for ifade in KIMLIK_YANI_IFADELER):
+            bastakiler.append(kolon)
+
+    kalan = [k for k in taninmayan if k not in bastakiler]
+    return bastakiler + bilinen + kalan
 
 
 def kesintili_personel(sonuc_df):
@@ -1335,7 +1429,7 @@ if __name__ == '__main__':
     raporlu = (sonuc['Rapor Durumu'] == 'Raporlu').sum()
     print(f"Dönem: {secilen_donem[0]}-{secilen_donem[1]:02d}")
     print(f"Personel: {len(sonuc)} | Raporlu: {raporlu}")
-    print(f"Toplam destek günü: {sonuc['Destek Gün'].sum():g}")
+    print(f"Toplam destek günü: {sonuc['Teşvik Gün Sayısı'].sum():g}")
     print(f"Çıktı (tüm personel): {ana_yol}")
     if kesintili_yol:
         print(f"Çıktı (kesintili personel): {kesintili_yol}")
