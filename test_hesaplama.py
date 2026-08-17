@@ -460,6 +460,75 @@ def test_mazeret_izni_yazimi_ne_olursa_olsun_dusmez():
     assert sonuc['Yıllık İzin Kesintisi'] == 0
 
 
+# ------------------------- İK'nın uç durum test dosyasından gelen senaryolar
+
+def test_izin_turu_bossa_nedene_bakilir():
+    """
+    İK dosyasında İzin Türü boş bırakılmış ama nedeni 'Hastalık Raporu' olan
+    kayıt vardı. Bu personel raporsuz sayılıyordu.
+    """
+    kayit = satir(1, '', '2026-08-19', '2026-08-19', 1, 'Hastalık Raporu')
+    sonuc = hesaplama.hesapla(pd.DataFrame([kayit]), (2026, 8)).iloc[0]
+    assert sonuc['Rapor Durumu'] == 'Raporlu'
+    assert sonuc['Rapor Gün'] == 1
+    assert sonuc['Hafta Sonu Kesintisi'] == 2       # 22-23 Ağustos
+    assert sonuc['Teşvik Gün Sayısı'] == 27
+
+
+def test_celiskili_tur_ve_neden_rapor_sayilmaz_ama_uyarir():
+    """Nedeni rapor, türü yıllık izin: sessizce karar vermek yerine uyarılır."""
+    kayit = satir(1, 'Yıllık İzin', '2026-08-19', '2026-08-19', 1, 'Hastalık Raporu')
+    sonuc = hesaplama.hesapla(pd.DataFrame([kayit]), (2026, 8)).iloc[0]
+    assert sonuc['Rapor Durumu'] == 'Raporsuz'
+    assert 'rapor gibi görünüyor' in sonuc['Uyarı']
+
+
+@pytest.mark.parametrize('metin, beklenen', [
+    ('05.08.2026', dt.date(2026, 8, 5)),      # ay-önce okunursa 8 Mayıs olurdu
+    ('01.08.2023', dt.date(2023, 8, 1)),
+    ('28.08.2026', dt.date(2026, 8, 28)),     # zaten ayrık
+    ('03.12.2026', dt.date(2026, 12, 3)),
+])
+def test_metin_tarihler_gun_once_okunur(tmp_path, metin, beklenen):
+    """
+    Türkçe gg.aa.yyyy metin tarihler ay-önce okunursa sessizce kayar.
+    '28.08' doğru okunduğu için hata gözden kaçabiliyordu.
+    """
+    kayit = satir(1, 'Yıllık İzin', '2026-08-03', '2026-08-04', 2)
+    kayit['İzin Başlangıç Tarihi'] = metin
+    kayit['İzin Bitiş Tarihi'] = metin
+    veri = hesaplama.oku(_yaz(tmp_path, [kayit]))
+    assert veri['İzin Başlangıç Tarihi'].iloc[0].date() == beklenen
+
+
+def test_zafer_bayrami_pazara_denk_gelirse_gun_eklenmez():
+    """30 Ağustos 2026 Pazar; 28-31 Ağustos izninde fazladan gün yaratmamalı."""
+    kayitlar = [
+        rapor(1, '2026-08-10', '2026-08-10', 1),
+        satir(1, 'Yıllık İzin', '2026-08-28', '2026-08-31', 2),
+    ]
+    sonuc = hesaplama.hesapla(pd.DataFrame(kayitlar), (2026, 8)).iloc[0]
+    assert sonuc['Resmi Tatil Kesintisi'] == 0
+    assert '30.08.2026 (hafta sonu — sayılmadı)' in sonuc['Resmi Tatiller']
+    # 28 Ağustos Cuma + 31 Ağustos Pazartesi = 2 iş günü yıllık izin
+    assert sonuc['Yıllık İzin Kesintisi'] == 2
+
+
+def test_resmi_tatiller_kolonu_bilgi_amacli():
+    """Tatil kesintiye girmese de görünmeli."""
+    sonuc = hesaplama.hesapla(
+        pd.DataFrame([rapor(1, '2026-07-09', '2026-07-09', 1)]), TEMMUZ).iloc[0]
+    assert sonuc['Resmi Tatiller'] == '15.07.2026'
+    assert sonuc['Resmi Tatil Kesintisi'] == 1
+
+
+def test_arife_resmi_tatiller_kolonunda_isaretlenir():
+    sonuc = hesaplama.hesapla(
+        pd.DataFrame([rapor(1, '2026-10-05', '2026-10-05', 1)]), (2026, 10)).iloc[0]
+    assert '28.10.2026 (arife — yarım gün)' in sonuc['Resmi Tatiller']
+    assert '29.10.2026' in sonuc['Resmi Tatiller']
+
+
 # ------------------------------------- Kural 3: yıllık izinde gün sayımı
 
 @pytest.mark.parametrize('toplam, beklenen', [

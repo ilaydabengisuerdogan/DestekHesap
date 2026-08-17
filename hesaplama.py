@@ -68,7 +68,8 @@ CIKTI_KOLON_SIRASI = [
     # --- kesinti kırılımı ---
     'Dönem', 'Rapor Durumu', 'Rapor Türü',
     'Rapor Gün', 'Hafta Sonu Kesintisi', 'Yıllık İzin Kesintisi',
-    'Resmi Tatil Kesintisi', 'Kısmi Rapor Kesintisi', 'Ücretsiz İzin Kesintisi',
+    'Resmi Tatiller', 'Resmi Tatil Kesintisi',
+    'Kısmi Rapor Kesintisi', 'Ücretsiz İzin Kesintisi',
     'Toplam Kesinti', 'Teşvik Saat Sayısı',
     'Uyarı',
 ]
@@ -709,6 +710,27 @@ def yillik_izin_kismi_kesintisi(toplam_gun):
     return math.ceil(toplam_gun)
 
 
+def tatil_notu(baslangic, bitis, tatiller, yarim_tatiller=None):
+    """
+    Aralıktaki resmi tatilleri, kesintiye girip girmediklerini belirterek listeler.
+
+    Bilgi amaçlıdır; hesabı değiştirmez. Kesintiye girmeyen tatiller de
+    görünsün diye hafta sonuna denk gelenler de yazılır ve nedeni belirtilir.
+    """
+    yarim_tatiller = yarim_tatiller or set()
+    notlar = []
+    for gun in gun_araligi(baslangic, bitis):
+        if gun in tatiller:
+            etiket = " (hafta sonu — sayılmadı)" if gun.weekday() >= 5 else ""
+        elif gun in yarim_tatiller:
+            etiket = (" (arife, hafta sonu — sayılmadı)" if gun.weekday() >= 5
+                      else " (arife — yarım gün)")
+        else:
+            continue
+        notlar.append(f"{gun:%d.%m.%Y}{etiket}")
+    return ", ".join(notlar)
+
+
 def deger_esit(deger, hedef):
     """
     İki metni büyük/küçük harf ve Türkçe karakter farkını yok sayarak karşılaştırır.
@@ -726,11 +748,26 @@ def deger_iceriyor(deger, hedefler):
 
 
 def rapor_mu(satir):
-    """Satır hastalık raporu ya da doğum istirahati mi?"""
-    return (
-        deger_esit(satir['İzin Türü'], RAPOR_IZIN_TURU)
-        and deger_iceriyor(satir['İzin Nedeni'], RAPOR_NEDENLERI)
-    )
+    """
+    Satır hastalık raporu ya da doğum istirahati mi?
+
+    Belirleyici alan İzin Nedeni'dir. İzin Türü boş bırakılmış olabilir
+    (İK dosyalarında görüldü); bu durumda yalnızca nedene bakılır.
+    Tür dolu ama farklı bir değerse çelişkili veri sayılır ve rapor kabul
+    edilmez — tutarsizlik_notu() bunu uyarı olarak bildirir.
+    """
+    if not deger_iceriyor(satir['İzin Nedeni'], RAPOR_NEDENLERI):
+        return False
+    turu = str(satir['İzin Türü'] or '').strip()
+    return not turu or deger_esit(turu, RAPOR_IZIN_TURU)
+
+
+def celiskili_rapor_mu(satir):
+    """İzin Nedeni rapor diyor ama İzin Türü başka bir şey mi?"""
+    if not deger_iceriyor(satir['İzin Nedeni'], RAPOR_NEDENLERI):
+        return False
+    turu = str(satir['İzin Türü'] or '').strip()
+    return bool(turu) and not deger_esit(turu, RAPOR_IZIN_TURU)
 
 
 # ------------------------------------------------------------------- okuma
@@ -879,9 +916,14 @@ def oku(kaynak, elle_eslesme=None):
                    if k not in KOLONLAR and k not in istege_bagli]
     df = df[KOLONLAR + istege_bagli + ek_kolonlar].copy()
 
+    # dayfirst=True: metin tarihler Türkçe gg.aa.yyyy biçiminde gelir.
+    # Bu olmadan '05.08.2026' sessizce 8 Mayıs olarak okunur; '28.08.2026'
+    # gibi ayrık olmayanlar doğru okunduğu için hata fark edilmez.
     tarih_kolonlari = ['İzin Başlangıç Tarihi', 'İzin Bitiş Tarihi'] + istege_bagli
     for kolon in tarih_kolonlari:
-        df[kolon] = pd.to_datetime(df[kolon], errors='coerce')
+        if kolon in SURE_KOLONLARI:
+            continue
+        df[kolon] = pd.to_datetime(df[kolon], errors='coerce', dayfirst=True)
 
     df['İzin Türü'] = df['İzin Türü'].fillna('').astype(str).str.strip()
     df['İzin Nedeni'] = df['İzin Nedeni'].fillna('').astype(str).str.strip()
@@ -920,7 +962,10 @@ def sureleri_hesapla(df, tatiller, yarim_tatiller=None):
     Not: Tarihlerden saatlik izin ayırt edilemez; her kayıt tam gün sayılır.
     Dosyada süre kolonu varsa bu fonksiyon hiçbir şey yapmaz.
     """
-    eksik = df.attrs.get('sure_hesaplanacak') or []
+    # attrs bazı pandas işlemlerinde kaybolabildiği için kolonun gerçekten
+    # var olup olmadığına da bakılır; aksi halde hesap sırasında çökme olur.
+    eksik = [k for k in (df.attrs.get('sure_hesaplanacak') or SURE_KOLONLARI)
+             if k not in df.columns]
     if not eksik:
         return df
 
@@ -1110,6 +1155,10 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None,
         uyari = tutarlilik_uyarisi(satir, tatiller, yarim_tatiller)
         if uyari:
             uyarilar.append(uyari)
+        if celiskili_rapor_mu(satir):
+            uyarilar.append(
+                f"'{satir['İzin Nedeni']}' rapor gibi görünüyor ama İzin Türü "
+                f"'{satir['İzin Türü']}' yazıyor; rapor sayılmadı, kontrol edin")
 
         baslangic = max(satir['İzin Başlangıç Tarihi'].date(), donem_ilk)
         bitis = min(satir['İzin Bitiş Tarihi'].date(), donem_son)
@@ -1154,6 +1203,9 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None,
         'Rapor Gün': 0.0,
         'Hafta Sonu Kesintisi': 0.0,
         'Yıllık İzin Kesintisi': 0.0,
+        # Bilgi amaçlı: dönemdeki tatiller, kesintiye girmeseler de görünür.
+        'Resmi Tatiller': (tatil_notu(donem_ilk, donem_son, tatiller, yarim_tatiller)
+                           if aralik else ''),
         'Resmi Tatil Kesintisi': 0.0,
         'Kısmi Rapor Kesintisi': 0.0,
         'Ücretsiz İzin Kesintisi': 0.0,
