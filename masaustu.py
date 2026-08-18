@@ -26,8 +26,10 @@ YESIL = '#10b981'
 ZEMIN = '#f8f9fa'
 GRI = '#6c757d'
 
-# Tabloda gösterilmeyen kolonlar (renkle/uyarı alanıyla zaten aktarılıyor).
-GIZLI_KOLONLAR = {'Dönem', 'Rapor Durumu', 'Uyarı'}
+# Tabloda gösterilmeyen kolonlar. 'Rapor Durumu' satır rengiyle, 'Dönem' ise
+# üstteki dönem seçiciyle zaten belli. 'Uyarı' tabloda gösterilir: kullanıcı
+# notu görmek için dosyayı kaydetmek zorunda kalmasın.
+GIZLI_KOLONLAR = {'Dönem', 'Rapor Durumu'}
 
 # Bilinen kolonların genişlikleri; listede olmayan (Ad Soyad, Sicil No gibi
 # sonradan eklenen) kolonlar VARSAYILAN_GENISLIK ile gösterilir.
@@ -41,11 +43,14 @@ KOLON_GENISLIKLERI = {
     'Resmi Tatil Kesintisi': 130,
     'Kısmi Rapor Kesintisi': 130,
     'Toplam Kesinti': 100,
-    'Teşvik Gün Sayısı': 90,
-    'Teşvik Saat Sayısı': 90,
+    'Teşvik Gün Sayısı': 110,
+    'Teşvik Saat Sayısı': 110,
+    'Resmi Tatiller': 260,
+    'Uyarı': 420,
 }
 VARSAYILAN_GENISLIK = 150
-SOLA_YASLI = {'Şirket', 'Rapor Türü'}
+SOLA_YASLI = {'Şirket', 'Rapor Türü', 'Resmi Tatiller', 'Uyarı',
+              'İzin Türü', 'İzin Nedeni'}
 
 
 YOK = "— (kolon yok) —"
@@ -643,7 +648,8 @@ class Uygulama(tk.Tk):
             if takvim:
                 metin += (f" {takvim} tanesinde izin gün sayısı resmi tatil takvimiyle "
                           f"uyuşmuyor — tatil listesini kontrol edin.")
-            metin += " Ayrıntı, kaydedilen Excel dosyasının 'Uyarı' kolonunda."
+            metin += (" Ayrıntı için tablodaki 'Uyarı' kolonuna bakın "
+                      "(en sağda, yatay çubukla kaydırın).")
             self.uyari_etiketi.config(text=metin)
         self.tabloyu_doldur()
 
