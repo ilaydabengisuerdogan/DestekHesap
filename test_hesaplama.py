@@ -69,7 +69,16 @@ GERCEK_PERSONEL_SAYISI = 215
 GERCEK_TOPLAM_DESTEK = 6383.0
 
 
+# Gerçek veri dosyası KVKK gereği depoda tutulmaz ve proje klasörü dışında
+# saklanabilir. Konumu ortam değişkeniyle bildirilebilir:
+#     set TEKNOPARK_TEST_VERISI=C:\yol\izin_raporu.xlsx
+VERI_ORTAM_DEGISKENI = 'TEKNOPARK_TEST_VERISI'
+
+
 def _gercek_dosya():
+    ozel = os.environ.get(VERI_ORTAM_DEGISKENI)
+    if ozel and os.path.exists(ozel):
+        return ozel
     eslesenler = glob.glob(os.path.join(os.path.dirname(__file__), '*İzin Raporu*.xlsx'))
     return eslesenler[0] if eslesenler else None
 
@@ -78,7 +87,7 @@ def _gercek_dosya():
 def gercek_sonuc():
     yol = _gercek_dosya()
     if yol is None:
-        pytest.skip("Gerçek izin raporu dosyası bulunamadı")
+        pytest.skip(f"Gerçek izin raporu bulunamadı — konumu {VERI_ORTAM_DEGISKENI} ortam değişkeniyle bildirilebilir")
     veri = hesaplama.oku(yol)
     return hesaplama.hesapla(veri, hesaplama.donem_tespit(veri))
 
@@ -86,7 +95,7 @@ def gercek_sonuc():
 def test_gercek_veri_donem_tespiti():
     yol = _gercek_dosya()
     if yol is None:
-        pytest.skip("Gerçek izin raporu dosyası bulunamadı")
+        pytest.skip(f"Gerçek izin raporu bulunamadı — konumu {VERI_ORTAM_DEGISKENI} ortam değişkeniyle bildirilebilir")
     assert hesaplama.donem_tespit(hesaplama.oku(yol)) == TEMMUZ
 
 
@@ -458,6 +467,109 @@ def test_mazeret_izni_yazimi_ne_olursa_olsun_dusmez():
         satir(1, 'MAZERET İZNİ', '2026-07-20', '2026-07-21', 2),
     ])
     assert sonuc['Yıllık İzin Kesintisi'] == 0
+
+
+# ------------------- izin kaydı olmayan personel (yalnızca giriş/çıkış tarihi)
+
+def _personel_satiri(kimlik, ise=None, cikis=None, sirket='Test A.Ş.'):
+    """İzin bilgisi olmayan, yalnızca kimlik ve tarih taşıyan satır."""
+    kayit = {
+        KIMLIK: kimlik, 'Şirket': sirket,
+        'İzin Türü': '', 'İzin Nedeni': '',
+        'İzin Başlangıç Tarihi': pd.NaT, 'İzin Bitiş Tarihi': pd.NaT,
+        'quantityInDays': 0, 'quantityInHours': 0,
+    }
+    if ise:
+        kayit[hesaplama.ISE_BASLAMA_KOLONU] = pd.Timestamp(ise)
+    if cikis:
+        kayit[hesaplama.CIKIS_KOLONU] = pd.Timestamp(cikis)
+    return kayit
+
+
+def test_izinsiz_personel_hesaba_dahil_edilir():
+    """
+    İzni olmayan ama işten çıkmış personelin de teşviki hesaplanır.
+    Bu satırlar izin tarihi boş olduğu için tamamen atılıyordu.
+    """
+    kayit = _personel_satiri(1, ise='2026-03-02', cikis='2026-08-21')
+    sonuc = hesaplama.hesapla(pd.DataFrame([kayit]), (2026, 8))
+    assert len(sonuc) == 1
+    r = sonuc.iloc[0]
+    assert r['Teşvik Gün Sayısı'] == 21          # 1-21 Ağustos
+    assert r['Toplam Kesinti'] == 0
+    assert '21 gün üzerinden' in r['Uyarı']
+
+
+def test_izinsiz_ve_cikissiz_personel_tam_tesvik_alir():
+    sonuc = hesaplama.hesapla(
+        pd.DataFrame([_personel_satiri(1, ise='2020-01-01')]), (2026, 8)).iloc[0]
+    assert sonuc['Teşvik Gün Sayısı'] == 30
+    assert sonuc['Uyarı'] == ''
+
+
+def test_izinsiz_ve_izinli_personel_ayni_dosyada():
+    """İzni olan ve olmayan kayıtlar bir arada okunabilmeli."""
+    kayitlar = [
+        _personel_satiri(1, ise='2026-03-02', cikis='2026-08-21'),
+        satir(2, 'Yıllık İzin', '2026-08-10', '2026-08-11', 2, 'Ücretli Yıllık İzin'),
+    ]
+    sonuc = hesaplama.hesapla(pd.DataFrame(kayitlar), (2026, 8))
+    assert len(sonuc) == 2
+    esle = dict(zip(sonuc[sonuc.columns[0]], sonuc['Teşvik Gün Sayısı']))
+    assert esle[1] == 21
+    assert esle[2] == 30          # raporsuz, yıllık izin düşmez
+
+
+def test_izinsiz_personelde_izin_kolonlari_bos_kalir():
+    """Birleştirilen izin bilgilerinde 'NaT' gibi değerler görünmemeli."""
+    sonuc = hesaplama.hesapla(
+        pd.DataFrame([_personel_satiri(1, cikis='2026-08-21')]), (2026, 8)).iloc[0]
+    assert sonuc['İzin Başlangıç Tarihi'] == ''
+    assert sonuc['İzin Bitiş Tarihi'] == ''
+    assert sonuc['İzin Türü'] == ''
+
+
+def test_hicbir_tarihi_olmayan_satir_personel_sayilmaz(tmp_path):
+    """
+    Dosya altına yazılan açıklama/dipnot satırları kimlik kolonuna düşer ama
+    hiçbir tarihi yoktur; personel sanılmamalı.
+    """
+    kayitlar = [
+        satir(1, 'Yıllık İzin', '2026-08-10', '2026-08-11', 2),
+        {KIMLIK: 'Sarı: kolay test senaryosu açıklaması', 'Şirket': '',
+         'İzin Türü': '', 'İzin Nedeni': '',
+         'İzin Başlangıç Tarihi': None, 'İzin Bitiş Tarihi': None,
+         'quantityInDays': 0, 'quantityInHours': 0},
+    ]
+    veri = hesaplama.oku(_yaz(tmp_path, kayitlar))
+    assert len(veri) == 1
+    assert veri[KIMLIK].iloc[0] == 1
+
+
+def test_yalnizca_cikis_tarihi_olan_satir_personel_sayilir(tmp_path):
+    """Tek bilgisi çıkış tarihi olsa bile personel kaydıdır."""
+    kayit = _personel_satiri(7, cikis='2026-08-21')
+    veri = hesaplama.oku(_yaz(tmp_path, [kayit]))
+    assert len(veri) == 1
+
+
+@pytest.mark.parametrize('baslik, beklenen', [
+    ('İzin Süresi/Gün', 'quantityInDays'),
+    ('İzin Süresi/Saat', 'quantityInHours'),
+    ('Çalışan Sicil Numarası', hesaplama.KIMLIK_KOLONU),
+    ('İşten Çıkış Tarihi', hesaplama.CIKIS_KOLONU),
+])
+def test_yeni_ik_formati_kolonlari_taninir(baslik, beklenen):
+    assert hesaplama._kolonlari_esle([baslik]).get(baslik) == beklenen
+
+
+def test_tek_ucu_dolu_tarih_tek_gune_cevrilir(tmp_path):
+    """Yalnızca başlangıç ya da yalnızca bitiş doluysa tek günlük sayılır."""
+    kayit = satir(1, 'Yıllık İzin', '2026-08-10', '2026-08-11', 2)
+    kayit['İzin Bitiş Tarihi'] = None
+    veri = hesaplama.oku(_yaz(tmp_path, [kayit]))
+    r = veri.iloc[0]
+    assert r['İzin Başlangıç Tarihi'] == r['İzin Bitiş Tarihi'] == pd.Timestamp('2026-08-10')
 
 
 # ------------------------- İK'nın uç durum test dosyasından gelen senaryolar

@@ -100,10 +100,10 @@ KOLON_ESANLAMLILARI = {
     'İzin Nedeni': ['İzin Neden', 'İzin Sebebi', 'Neden', 'Açıklama', 'Leave Reason'],
     'İzin Başlangıç Tarihi': ['Başlangıç Tarihi', 'Başlangıç', 'İlk Gün', 'Start Date'],
     'İzin Bitiş Tarihi': ['Bitiş Tarihi', 'Bitiş', 'Son Gün', 'End Date'],
-    'quantityInDays': ['Süre/Gün', 'Süre Gün', 'Gün', 'Gün Sayısı',
-                       'İzin Gün Sayısı', 'Days'],
-    'quantityInHours': ['Süre/Saat', 'Süre Saat', 'Saat', 'Saat Sayısı',
-                        'İzin Saat Sayısı', 'Hours'],
+    'quantityInDays': ['İzin Süresi/Gün', 'İzin Süresi Gün', 'Süre/Gün', 'Süre Gün',
+                       'Gün', 'Gün Sayısı', 'İzin Gün Sayısı', 'Days'],
+    'quantityInHours': ['İzin Süresi/Saat', 'İzin Süresi Saat', 'Süre/Saat', 'Süre Saat',
+                        'Saat', 'Saat Sayısı', 'İzin Saat Sayısı', 'Hours'],
     # 'İzne/İşe Esas Tarihi': İK sisteminin çıktısında işe başlama tarihini taşıyor
     # (personel başına sabit, kıdem hesabının dayanağı). İK ile teyit edildi.
     ISE_BASLAMA_KOLONU: ['İzne Esas Tarihi', 'İşe Esas Tarihi', 'İşe Giriş Tarihi',
@@ -936,14 +936,28 @@ def oku(kaynak, elle_eslesme=None):
         if kolon in df.columns:
             df[kolon] = pd.to_numeric(df[kolon], errors='coerce').fillna(0.0)
 
-    # Kimliği ya da tarihi olmayan satırlar hesaba alınamaz.
-    df = df.dropna(subset=[KIMLIK_KOLONU, 'İzin Başlangıç Tarihi', 'İzin Bitiş Tarihi'])
+    # Kimliği olmayan satır hesaba alınamaz. İzin tarihi boş olan satırlar
+    # ATILMAZ: izni olmayan ama işe giriş/çıkış tarihi bulunan personel de
+    # teşvik hesabına girer (çalıştığı gün sayısı üzerinden).
+    #
+    # Ancak hiçbir tarihi olmayan satır personel kaydı değildir; dosyaların
+    # altına yazılan açıklama/dipnot satırları böyle görünür ve personel
+    # sanılmamalıdır.
+    df = df.dropna(subset=[KIMLIK_KOLONU])
+    tarihli = [k for k in ('İzin Başlangıç Tarihi', 'İzin Bitiş Tarihi',
+                           ISE_BASLAMA_KOLONU, CIKIS_KOLONU) if k in df.columns]
+    df = df[df[tarihli].notna().any(axis=1)]
     if df.empty:
         raise GirdiHatasi("Dosyada işlenebilir veri satırı bulunamadı.")
 
     # Bitiş başlangıçtan önceyse tek günlük kayıt olarak ele al.
     ters = df['İzin Bitiş Tarihi'] < df['İzin Başlangıç Tarihi']
     df.loc[ters, 'İzin Bitiş Tarihi'] = df.loc[ters, 'İzin Başlangıç Tarihi']
+    # Yalnızca bir uç doluysa diğerini eşitle (tek günlük kayıt sayılır).
+    tek_uc = df['İzin Bitiş Tarihi'].isna() & df['İzin Başlangıç Tarihi'].notna()
+    df.loc[tek_uc, 'İzin Bitiş Tarihi'] = df.loc[tek_uc, 'İzin Başlangıç Tarihi']
+    tek_uc = df['İzin Başlangıç Tarihi'].isna() & df['İzin Bitiş Tarihi'].notna()
+    df.loc[tek_uc, 'İzin Başlangıç Tarihi'] = df.loc[tek_uc, 'İzin Bitiş Tarihi']
 
     df = df.drop_duplicates()
     df = df.reset_index(drop=True)
@@ -970,13 +984,15 @@ def sureleri_hesapla(df, tatiller, yarim_tatiller=None):
         return df
 
     df = df.copy()
-    gunler = df.apply(
-        lambda s: gun_toplami(
+    def _gun(s):
+        if pd.isna(s['İzin Başlangıç Tarihi']) or pd.isna(s['İzin Bitiş Tarihi']):
+            return 0.0          # izin kaydı olmayan personel satırı
+        return gun_toplami(
             gun_araligi(s['İzin Başlangıç Tarihi'].date(),
                         s['İzin Bitiş Tarihi'].date()),
-            tatiller, yarim_tatiller),
-        axis=1,
-    ).astype(float)
+            tatiller, yarim_tatiller)
+
+    gunler = df.apply(_gun, axis=1).astype(float)
 
     if 'quantityInDays' in eksik:
         df['quantityInDays'] = gunler
@@ -987,7 +1003,11 @@ def sureleri_hesapla(df, tatiller, yarim_tatiller=None):
 
 def donem_tespit(df):
     """İzin başlangıç tarihlerinin en sık görüldüğü (yıl, ay) ikilisini döner."""
-    donemler = df['İzin Başlangıç Tarihi'].dt.to_period('M')
+    tarihli = df['İzin Başlangıç Tarihi'].dropna()
+    if tarihli.empty:
+        bugun = dt.date.today()
+        return bugun.year, bugun.month
+    donemler = tarihli.dt.to_period('M')
     en_sik = donemler.mode()
     secilen = en_sik.iloc[0] if not en_sik.empty else donemler.min()
     return int(secilen.year), int(secilen.month)
@@ -1003,6 +1023,8 @@ def tutarlilik_uyarisi(satir, tatiller, yarim_tatiller=None):
     Arife günleri yarım sayıldığı için 0,5'lik farklar da anlamlıdır.
     Saatlik izinlerde (1 günden az) kontrol edilmez.
     """
+    if pd.isna(satir['İzin Başlangıç Tarihi']) or pd.isna(satir['İzin Bitiş Tarihi']):
+        return None
     gun_sayisi = satir['quantityInDays']
     if gun_sayisi < 1:
         return None
@@ -1160,6 +1182,8 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None,
                 f"'{satir['İzin Nedeni']}' rapor gibi görünüyor ama İzin Türü "
                 f"'{satir['İzin Türü']}' yazıyor; rapor sayılmadı, kontrol edin")
 
+        if pd.isna(satir['İzin Başlangıç Tarihi']) or pd.isna(satir['İzin Bitiş Tarihi']):
+            continue  # izin kaydı olmayan personel satırı; yalnızca taban için var
         baslangic = max(satir['İzin Başlangıç Tarihi'].date(), donem_ilk)
         bitis = min(satir['İzin Bitiş Tarihi'].date(), donem_son)
         if baslangic > bitis:
@@ -1190,9 +1214,9 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None,
         'İzin Türü': _birlestir(satirlar['İzin Türü']),
         'İzin Nedeni': _birlestir(satirlar['İzin Nedeni']),
         'İzin Başlangıç Tarihi': _birlestir(
-            satirlar['İzin Başlangıç Tarihi'].dt.strftime('%d.%m.%Y')),
+            satirlar['İzin Başlangıç Tarihi'].dropna().dt.strftime('%d.%m.%Y')),
         'İzin Bitiş Tarihi': _birlestir(
-            satirlar['İzin Bitiş Tarihi'].dt.strftime('%d.%m.%Y')),
+            satirlar['İzin Bitiş Tarihi'].dropna().dt.strftime('%d.%m.%Y')),
         'Dönem': f"{donem[0]}-{donem[1]:02d}",
         'Kıdem Yılı': '' if kidem is None else kidem,
         # 1 yılını doldurmamış personelin yıllık izin kaydı yasal olarak hak

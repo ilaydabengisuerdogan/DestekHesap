@@ -207,6 +207,12 @@ Belirleyici kriter, personelin o ay icinde SAGLIK RAPORU
 
   Bunun icin dosyada "Cikis Tarihi" ve "Ise Baslama
   Tarihi" kolonlari bulunmalidir; yoksa taban 30 gundur.
+
+  IZNI OLMAYAN PERSONEL DE HESABA GIRER
+  Bir personelin o ay hic izni yoksa, satirinda yalnizca
+  kimlik ve tarih bilgileri bulunsa bile tesviki hesaplanir.
+  Ornek: 21 Agustos'ta isten cikan, hic izni olmayan
+  personel 21 gun tesvik alir.
   Taban 30'un altindaysa "Uyari" kolonunda belirtilir.
 
 

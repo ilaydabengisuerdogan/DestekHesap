@@ -27,6 +27,10 @@ kadın doğum istirahati) olup olmadığıdır.
 katılmaz. `İşten Çıkış Tarihi` veya `İşe Başlama Tarihi` kolonu yoksa taban 30 gündür.
 Taban 30'un altındaysa çıktının `Uyarı` kolonunda belirtilir.
 
+**İzni olmayan personel de hesaba girer.** Bir personelin o ay hiç izin kaydı yoksa,
+satırında yalnızca kimlik ve tarih bilgileri bulunsa bile teşviki hesaplanır.
+Örneğin 21 Ağustos'ta işten çıkan, hiç izni olmayan personel 21 gün teşvik alır.
+
 ### Her personelde düşen
 
 | Kesinti | Tanım |
@@ -57,16 +61,16 @@ Evlilik İzni — personel raporlu olsa bile düşmez.
 
 İşe başlama tarihinden itibaren **1 yılını doldurmamış** personelin yıllık izni
 yasal olarak hak edilmemiş sayılır; bu kayıt, aynı dönemde raporu olsa dahi
-teşvikten **düşülmez**, çıktının `Uyarı` kolonunda belirtilir ve `Riskli`
-kolonunda işaretlenir.
+teşvikten **düşülmez**, çıktının `Uyarı` kolonunda belirtilir ve `Risk`
+kolonunda **Riskli** olarak işaretlenir.
 
 Kıdem, gün sayısıyla değil takvim yıldönümüyle hesaplanır. `İşe Başlama Tarihi`
-kolonu dosyada yoksa kural uygulanmaz ve `Kıdem (Yıl)`, `Yıllık İzin Hakkı`,
-`Riskli` kolonları çıktıda **hiç görünmez**. Kolon geldiğinde kendiliğinden geri gelir.
+kolonu dosyada yoksa kural uygulanmaz ve `Kıdem Yılı` ile `Risk` kolonları
+çıktıda **hiç görünmez**. Kolon geldiğinde kendiliğinden geri gelir.
 
-| Kıdem | Yıllık izin hakkı |
+| Kıdem | Yıllık izin hakkı (İş Kanunu) |
 |---|---:|
-| 0–1 yıl | hak yok — **riskli** olarak işaretlenir |
+| 0–1 yıl | hak yok — **Riskli** olarak işaretlenir |
 | 1–5 yıl | 14 gün |
 | 5–15 yıl | 20 gün |
 | 15 yıl ve üzeri | 26 gün |
@@ -86,8 +90,8 @@ farklı bir kural işler: ≤ 4 saat yarım gün, > 4 saat tam gün.
 haftasının hafta sonu 1–2 Ağustos olduğu için Temmuz hesabına girmez.
 
 ```
-Destek Gün  = max(0, teşvik tabanı − toplam kesinti)
-Destek Saat = Destek Gün × 8
+Teşvik Gün Sayısı  = max(0, teşvik tabanı − toplam kesinti)
+Teşvik Saat Sayısı = Teşvik Gün Sayısı × 8
 ```
 
 ### Örnek — ay içinde işten çıkış
@@ -178,7 +182,7 @@ yaramaz — Gmail zip içindeki `.exe` dosyalarını da engeller.
 | `hesaplama.py` | **Kural motoru** — okuma, doğrulama, hesap, Excel yazma. Arayüzden bağımsız. |
 | `masaustu.py` | Masaüstü penceresi (tkinter). Dağıtılan uygulamanın arayüzü. |
 | `app.py` | Tarayıcı arayüzü (Streamlit). Aynı motoru kullanır. |
-| `test_hesaplama.py` | 105 test senaryosu. |
+| `test_hesaplama.py` | 190 test senaryosu. |
 | `paketle.py` | PyInstaller ile tek dosya `.exe` üretir. |
 | `kurulum.iss` / `kurulum_yap.py` | Inno Setup ile kurulum dosyası (setup) üretir. |
 | `KULLANIM.txt` | İK için kullanım kılavuzu; kurulumla birlikte dağıtılır. |
@@ -194,14 +198,14 @@ Gereken sekiz bilgi ve tanınan adlandırmalar:
 
 | Gereken | Tanınan adlar |
 |---|---|
-| Personel kimliği | Çalışan Numarası, **Çalışan Sicil**, Sicil, Sicil No, Personel No, TC, **Ad Soyad**, İsim, Employee Id |
+| Personel kimliği | Çalışan Numarası, **Çalışan Sicil Numarası**, Sicil No, Personel No, TC, **Çalışan Adı Soyadı**, Ad Soyad, İsim |
 | `Şirket` | Firma, Şirket Adı, Company |
 | `İzin Türü` | **İzin Tipi**, Devamsızlık Tipi, Leave Type |
 | `İzin Nedeni` | **İzin Neden**, İzin Sebebi, Neden, Açıklama |
 | `İzin Başlangıç Tarihi` | Başlangıç Tarihi, Başlangıç, İlk Gün |
 | `İzin Bitiş Tarihi` | Bitiş Tarihi, Bitiş, Son Gün |
-| `quantityInDays` | **Süre/Gün**, Gün, Gün Sayısı, İzin Gün Sayısı |
-| `quantityInHours` | **Süre/Saat**, Saat, Saat Sayısı, İzin Saat Sayısı |
+| `quantityInDays` | **İzin Süresi/Gün**, **Süre/Gün**, Gün, Gün Sayısı |
+| `quantityInHours` | **İzin Süresi/Saat**, **Süre/Saat**, Saat, Saat Sayısı |
 
 İsteğe bağlı: `İşe Başlama Tarihi` — kıdem şartı için. **İzne Esas Tarihi**,
 İşe Giriş Tarihi, Hire Date adlarıyla da tanınır.
@@ -301,7 +305,15 @@ python -m pytest test_hesaplama.py -q
 **Senaryoların tamamı beklenen sonuçlarıyla birlikte → [TEST_SENARYOLARI.md](TEST_SENARYOLARI.md)**
 
 > Gerçek veri regresyon testleri, izin raporu dosyası çalışma dizininde yoksa
-> otomatik olarak atlanır. Veri dosyaları depoda bulunmaz (aşağıya bakınız).
+> atlanır ve `pytest` çıktısında `skipped` olarak görünür. Dosya proje klasörü
+> dışında duruyorsa konumu ortam değişkeniyle bildirilebilir:
+>
+> ```
+> set TEKNOPARK_TEST_VERISI=C:\yol\izin_raporu.xlsx
+> python -m pytest test_hesaplama.py -q
+> ```
+>
+> Veri dosyaları depoda bulunmaz (aşağıya bakınız).
 
 ---
 
