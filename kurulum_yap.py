@@ -13,6 +13,7 @@ Gereksinim: Inno Setup 6 — https://jrsoftware.org/isdl.php (bir kez kurulur)
 
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 KOK = Path(__file__).parent.resolve()
@@ -48,6 +49,23 @@ def exe_guncel_mi():
                for ad in KAYNAKLAR if (KOK / ad).exists())
 
 
+def zip_uret():
+    """
+    Kurulum dosyasını kullanım kılavuzuyla birlikte zipler.
+
+    Zip elle üretildiğinde kurulum güncellenip zip eski kalıyordu; her
+    derlemede birlikte üretilsin diye buraya alındı.
+    """
+    zip_yolu = KURULUM.with_suffix('.zip')
+    zip_yolu.unlink(missing_ok=True)
+    with zipfile.ZipFile(zip_yolu, 'w', zipfile.ZIP_DEFLATED) as paket:
+        paket.write(KURULUM, KURULUM.name)
+        kilavuz = KOK / 'KULLANIM.txt'
+        if kilavuz.exists():
+            paket.write(kilavuz, kilavuz.name)
+    return zip_yolu
+
+
 def main():
     iscc = iscc_bul()
 
@@ -74,8 +92,11 @@ def main():
     if sonuc.returncode != 0 or not KURULUM.exists():
         sys.exit("\nKurulum dosyası üretilemedi.")
 
+    zip_yolu = zip_uret()
+
     print(f"\nTamamlandı: {KURULUM}")
     print(f"Boyut: {KURULUM.stat().st_size / 1024 / 1024:.1f} MB")
+    print(f"Zip:   {zip_yolu.name} ({zip_yolu.stat().st_size / 1024 / 1024:.1f} MB)")
     print("\nBu dosyayı paylaşırken e-posta/WhatsApp yerine OneDrive veya")
     print("Teams bağlantısı kullanın; e-posta .exe dosyalarını engeller.")
 
