@@ -529,6 +529,33 @@ def test_izinsiz_personelde_izin_kolonlari_bos_kalir():
     assert sonuc['İzin Türü'] == ''
 
 
+def test_kesinti_olmadan_eksik_calisan_personel_filtreye_girer(tmp_path):
+    """
+    Kesintisi olmasa bile donemin tamamini calismayan personel 'tesvigi
+    eksik olan' listesinde gorunmeli; ekranda ve _kesintili dosyasinda
+    bu filtre kullaniliyor.
+    """
+    kayitlar = [
+        _personel_satiri(1, ise='2026-03-02', cikis='2026-08-21'),
+        _personel_satiri(2, ise='2020-01-01'),
+    ]
+    sonuc = hesaplama.hesapla(hesaplama.oku(_yaz(tmp_path, kayitlar)), (2026, 8))
+    eksik = hesaplama.kesintili_personel(sonuc)
+
+    assert list(eksik[KIMLIK]) == [1]
+    tek = eksik.iloc[0]
+    assert tek['Toplam Kesinti'] == 0
+    assert tek['Teşvik Gün Sayısı'] == 21
+
+
+def test_tam_calisan_kesintisiz_personel_filtreye_girmez(tmp_path):
+    """Tam ay çalışan ve kesintisi olmayan personel filtrede görünmemeli."""
+    sonuc = hesaplama.hesapla(
+        hesaplama.oku(_yaz(tmp_path, [_personel_satiri(9, ise='2020-01-01')])),
+        (2026, 8))
+    assert hesaplama.kesintili_personel(sonuc).empty
+
+
 def test_hicbir_tarihi_olmayan_satir_personel_sayilmaz(tmp_path):
     """
     Dosya altına yazılan açıklama/dipnot satırları kimlik kolonuna düşer ama

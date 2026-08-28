@@ -446,7 +446,7 @@ class Uygulama(tk.Tk):
         kutu4.pack(fill='both', expand=True, pady=(12, 0))
 
         self.filtre_degeri = tk.BooleanVar(value=True)
-        ttk.Checkbutton(kutu4, text="Yalnızca kesintisi olan personeli göster",
+        ttk.Checkbutton(kutu4, text="Yalnızca teşviği eksik olan personeli göster",
                         variable=self.filtre_degeri, command=self.tabloyu_doldur).pack(anchor='w')
 
         tablo_cerceve = ttk.Frame(kutu4)
@@ -688,7 +688,7 @@ class Uygulama(tk.Tk):
             self.tablo.insert('', 'end', values=degerler, tags=(etiket,))
 
         if gosterilen.empty:
-            self.durum_etiketi.config(text="Bu dönemde kesintisi olan personel bulunmuyor.")
+            self.durum_etiketi.config(text="Bu dönemde teşviği eksik olan personel bulunmuyor.")
 
     def kaydet(self):
         if self.sonuc is None:
@@ -717,9 +717,9 @@ class Uygulama(tk.Tk):
             self.durum_etiketi.config(text="Kaydedildi.")
             mesaj = f"Tüm personel ({len(self.sonuc)} kişi):\n{ana_yol}"
             if kesintili_yol:
-                mesaj += f"\n\nKesintisi olan personel ({kesintili_sayi} kişi):\n{kesintili_yol}"
+                mesaj += f"\n\nTeşviği eksik olan personel ({kesintili_sayi} kişi):\n{kesintili_yol}"
             else:
-                mesaj += "\n\nKesintisi olan personel bulunmadığı için ikinci dosya oluşturulmadı."
+                mesaj += "\n\nTeşviği eksik olan personel bulunmadığı için ikinci dosya oluşturulmadı."
             messagebox.showinfo("Kaydedildi", mesaj)
 
     # ----------------------------------------------------------- yardımcılar

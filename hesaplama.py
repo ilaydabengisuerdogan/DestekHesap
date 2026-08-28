@@ -1448,8 +1448,20 @@ def _kolonlari_sirala(kolonlar):
 
 
 def kesintili_personel(sonuc_df):
-    """Teşvikten kesinti yapılan personeli döner (kesintisi 0 olanlar hariç)."""
-    return sonuc_df[sonuc_df['Toplam Kesinti'] > 0].reset_index(drop=True)
+    """
+    Teşviği tam aydan eksik olan personeli döner.
+
+    İki sebeple eksik olabilir ve ikisi de bu listeye girer:
+      1. Kesinti yapılmıştır (rapor, izin, resmi tatil...).
+      2. Kesintisi yoktur ama dönemin tamamında çalışmamıştır; işe giriş
+         veya çıkış tarihi nedeniyle teşvik tabanı 30 günün altındadır.
+
+    Ölçüt doğrudan sonuç günü olduğu için her iki durumu da kapsar:
+    teşvik = taban - kesinti olduğundan, tam ay çalışıp hiç kesinti
+    almayan personel dışında herkes bu filtreye takılır.
+    """
+    eksik = sonuc_df['Teşvik Gün Sayısı'] < TESVIK_TABAN_GUN
+    return sonuc_df[eksik].reset_index(drop=True)
 
 
 def kesintili_dosya_yolu(yol):
@@ -1474,7 +1486,7 @@ def excel_yaz_ikili(sonuc_df, yol):
     """
     İki Excel dosyası yazar ve yollarını döner:
       1. Ana dosya  — tüm personel
-      2. '_kesintili' dosyası — yalnızca kesintisi olan personel
+      2. '_kesintili' dosyası — yalnızca teşviği eksik olan personel
 
     Kesintisi olan personel yoksa ikinci dosya oluşturulmaz (None döner).
     """
