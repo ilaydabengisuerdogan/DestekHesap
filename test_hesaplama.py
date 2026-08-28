@@ -9,6 +9,7 @@ Kural motoru testleri.
 import datetime as dt
 import glob
 import json
+import io
 import os
 
 import pandas as pd
@@ -527,6 +528,19 @@ def test_izinsiz_personelde_izin_kolonlari_bos_kalir():
     assert sonuc['İzin Başlangıç Tarihi'] == ''
     assert sonuc['İzin Bitiş Tarihi'] == ''
     assert sonuc['İzin Türü'] == ''
+
+
+def test_ekran_filtresi_olcutu_kopyalamaz():
+    """
+    Ekran filtresi olcutu kendi icinde tekrar tanimlamamali; hesaplama
+    katmanindaki kesintili_personel() cagrilmali. Bir kez kopyalandigi
+    icin ekran ile '_kesintili' dosyasi ayri sonuc vermisti.
+    """
+    kaynak = io.open(
+        os.path.join(os.path.dirname(__file__), 'masaustu.py'),
+        encoding='utf-8').read()
+    assert "'Toplam Kesinti'] > 0" not in kaynak
+    assert 'hesaplama.kesintili_personel(' in kaynak
 
 
 def test_kesinti_olmadan_eksik_calisan_personel_filtreye_girer(tmp_path):

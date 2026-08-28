@@ -664,7 +664,9 @@ class Uygulama(tk.Tk):
             return
         gosterilen = self.sonuc
         if self.filtre_degeri.get():
-            gosterilen = gosterilen[gosterilen['Toplam Kesinti'] > 0]
+            # Ölçüt hesaplama katmanında tek yerde duruyor; burada
+            # kopyalanmamalı, yoksa ekran ile '_kesintili' dosyası ayrışır.
+            gosterilen = hesaplama.kesintili_personel(gosterilen)
 
         kolonlar = [k for k in self.sonuc.columns if k not in GIZLI_KOLONLAR]
         if list(self.tablo['columns']) != kolonlar:
