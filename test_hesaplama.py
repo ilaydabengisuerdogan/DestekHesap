@@ -1162,7 +1162,10 @@ def test_kullanici_ornegi():
     """
     Kullanıcının verdiği örnek: 2. haftada 2 saatlik eksik çalışma, farklı bir
     haftada 2 gün yıllık izin, yine farklı bir haftada 1 gün resmi tatil.
-    Beklenen kayıp: 0,5 + 2 (hafta sonu) + 2 (yıllık izin) + 1 (resmi tatil) = 5,5 gün.
+    Kırılım: 0,5 + 2 (hafta sonu) + 2 (yıllık izin) + 1 (resmi tatil) = 5,5 gün.
+
+    İK kararı gereği toplam kesinti tam güne yukarı tamamlanır: 5,5 -> 6.
+    Kırılım kolonlarında yarım gün ayrıntısı olduğu gibi durur.
     """
     sonuc = hesapla([
         # 2. hafta (6-12 Temmuz) içinde eksik çalışmaya yol açan rapor
@@ -1170,8 +1173,35 @@ def test_kullanici_ornegi():
         satir(1, 'Yıllık İzin', '2026-07-20', '2026-07-21', 2),
     ])
     # 0,5 gün eksik çalışma + 2 gün hafta sonu (11-12) + 2 gün yıllık izin + 1 gün 15 Temmuz
-    assert sonuc['Toplam Kesinti'] == 5.5
-    assert sonuc['Teşvik Gün Sayısı'] == 24.5
+    assert sonuc['Kısmi Rapor Kesintisi'] == 0.5      # kırılımda yarım gün duruyor
+    assert sonuc['Toplam Kesinti'] == 6               # toplam yukarı tamamlandı
+    assert sonuc['Teşvik Gün Sayısı'] == 24
+
+
+@pytest.mark.parametrize('ham, beklenen', [
+    (0.0, 0.0),
+    (0.5, 1.0),
+    (5.5, 6.0),
+    (6.0, 6.0),      # zaten tam gunse degismez
+    (11.5, 12.0),
+])
+def test_toplam_kesinti_tam_gune_yukari_tamamlanir(ham, beklenen):
+    assert hesaplama.kesintiyi_tam_gune_tamamla(ham) == beklenen
+
+
+def test_arife_yarim_gunu_toplamda_tam_gune_tamamlanir():
+    """
+    Arife yarim gun sayildigi icin kesinti bucuklu cikabilir; toplam yukari
+    tamamlanir ve tesvik tam sayi kalir.
+    """
+    # Yardimci sabit Temmuz takvimini kullandigi icin dogrudan cagriliyor:
+    # takvim verilmezse donemin gercek tatilleri (arife dahil) uretilir.
+    tablo = hesaplama.hesapla(
+        pd.DataFrame([rapor(1, '2026-05-25', '2026-05-27', 3)]), (2026, 5))
+    sonuc = tablo.iloc[0]
+    assert sonuc['Rapor Gün'] == 1.5          # 26 Mayis arifesi yarim
+    assert float(sonuc['Toplam Kesinti']).is_integer()
+    assert float(sonuc['Teşvik Gün Sayısı']).is_integer()
 
 
 def test_resmi_tatil_hafta_sonuna_denk_gelirse_sayilmaz():

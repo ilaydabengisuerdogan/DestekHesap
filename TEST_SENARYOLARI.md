@@ -163,8 +163,12 @@ aşıyorsa tam gün olarak düşülür.
 | O haftanın hafta sonu | 2,0 |
 | Yıllık izin | 2,0 |
 | Resmi tatil | 1,0 |
-| **Toplam kesinti** | **5,5** |
-| Destek günü | 24,5 |
+| Kırılım toplamı | 5,5 |
+| **Toplam kesinti** (tam güne tamamlanır) | **6** |
+| Destek günü | **24** |
+
+Toplam kesinti tam güne yukarı tamamlanır (5,5 → 6), böylece teşvik günü her
+zaman tam sayı çıkar. Kırılım kolonlarında yarım gün ayrıntısı korunur.
 
 ---
 

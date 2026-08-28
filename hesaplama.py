@@ -698,6 +698,24 @@ def yillik_izin_hakki(kidem):
     return 0
 
 
+def kesintiyi_tam_gune_tamamla(toplam):
+    """
+    Toplam kesintiyi tam güne yukarı tamamlar (İK kararı).
+
+    5,5 gün kesinti 6 gün sayılır. Teşvik tabanı her zaman tam sayı olduğu
+    için bu, teşviği aşağı yuvarlamakla birebir aynı sonucu verir:
+    30 - 5,5 = 24,5 yerine 30 - 6 = 24.
+
+    Yarım günler arife (0,5) ve kısmi yıllık izinden geliyor; kırılım
+    kolonlarında ayrıntı olduğu gibi durur, yuvarlama yalnızca toplama
+    uygulanır.
+    """
+    toplam = round(toplam, 6)
+    if toplam <= 0:
+        return 0.0
+    return float(math.ceil(toplam))
+
+
 def yillik_izin_kismi_kesintisi(toplam_gun):
     """
     Yıllık izindeki yarım günlerin toplamını tam güne yuvarlar (Kural 3).
@@ -1260,7 +1278,8 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None,
 
     if not rapor_satirlari:
         # Raporu olmayan personelde yıllık izin ve resmi tatil düşmez.
-        toplam = gun_toplami(ucretsiz_gunleri, tatiller, yarim_tatiller)
+        toplam = kesintiyi_tam_gune_tamamla(
+            gun_toplami(ucretsiz_gunleri, tatiller, yarim_tatiller))
         destek = max(0.0, taban - toplam)
         sonuc.update({
             'Ücretsiz İzin Kesintisi': toplam,
@@ -1350,7 +1369,7 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None,
     yillik_kesinti = (gun_toplami(izin_gunleri, tatiller, yarim_tatiller)
                       + yillik_izin_kismi_kesintisi(yarim_gun_toplami))
 
-    toplam_kesinti = (
+    toplam_kesinti = kesintiyi_tam_gune_tamamla(
         rapor_kesintisi + len(hafta_sonlari) + yillik_kesinti
         + resmi_tatil_kesintisi + ucretsiz_kesintisi + kismi_kesinti
     )
