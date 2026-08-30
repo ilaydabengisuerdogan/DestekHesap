@@ -69,7 +69,7 @@ CIKTI_KOLON_SIRASI = [
     'Dönem', 'Rapor Durumu', 'Rapor Türü',
     'Rapor Gün', 'Hafta Sonu Kesintisi', 'Yıllık İzin Kesintisi',
     'Resmi Tatiller', 'Resmi Tatil Kesintisi',
-    'Kısmi Rapor Kesintisi', 'Ücretsiz İzin Kesintisi',
+    'Kısmi Rapor Kesintisi', 'Ücretsiz İzin Günü',
     'Toplam Kesinti', 'Teşvik Saat Sayısı',
     'Uyarı',
 ]
@@ -1250,7 +1250,7 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None,
                            if aralik else ''),
         'Resmi Tatil Kesintisi': 0.0,
         'Kısmi Rapor Kesintisi': 0.0,
-        'Ücretsiz İzin Kesintisi': 0.0,
+        'Ücretsiz İzin Günü': 0.0,
         'Teşvik Tabanı': float(taban),
         'Toplam Kesinti': 0.0,
         'Teşvik Gün Sayısı': float(taban),
@@ -1266,24 +1266,37 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None,
             f"Personel bu dönemde çalışmıyor, teşvik hesaplanmadı"
         )
 
-    # (0) Ücretsiz izin: ücret ödenmediği ve SGK primi yatmadığı için rapor
-    # durumundan bağımsız olarak her personelde düşer.
+    # (0) Ücretsiz izin: ücret ödenmediği ve SGK primi yatmadığı için personel
+    # o günlerde çalışmış sayılmaz. Bu yüzden kesinti olarak değil, TEŞVİK
+    # TABANINI daraltarak uygulanır ve takvim günü olarak sayılır (hafta sonu
+    # ve resmi tatil dahil) -- tıpkı işe giriş/çıkış gibi. Böylece ayın tamamı
+    # ücretsiz izinli personelin teşviki 0, ayın 21 günü çalışanınki 21 olur.
+    # Rapor durumundan bağımsızdır.
     ucretsiz_gunleri = set()
     for satir, baslangic, bitis in diger_satirlar:
         if not deger_iceriyor(satir['İzin Türü'], HER_KOSULDA_KESINTI_TURLERI):
             continue
         for gun in gun_araligi(baslangic, bitis):
-            if is_gunu(gun, tatiller):
+            if donem_ilk <= gun <= donem_son:
                 ucretsiz_gunleri.add(gun)
+
+    if ucretsiz_gunleri:
+        # Çalışılan gün = şirkette bulunduğu aralık - ücretsiz izin günleri.
+        calisilan = (donem_son - donem_ilk).days + 1 - len(ucretsiz_gunleri)
+        taban = float(max(0, min(TESVIK_TABAN_GUN, calisilan)))
+        sonuc['Teşvik Tabanı'] = taban
+        sonuc['Ücretsiz İzin Günü'] = float(len(ucretsiz_gunleri))
+        uyarilar.append(
+            f"{len(ucretsiz_gunleri)} gün ücretsiz izin kullanıldığı için "
+            f"teşvik {taban:g} gün üzerinden hesaplandı"
+        )
 
     if not rapor_satirlari:
         # Raporu olmayan personelde yıllık izin ve resmi tatil düşmez.
-        toplam = kesintiyi_tam_gune_tamamla(
-            gun_toplami(ucretsiz_gunleri, tatiller, yarim_tatiller))
-        destek = max(0.0, taban - toplam)
+        # Ücretsiz izin kesinti değil, taban daraltması olarak zaten uygulandı.
+        destek = taban
         sonuc.update({
-            'Ücretsiz İzin Kesintisi': toplam,
-            'Toplam Kesinti': toplam,
+            'Toplam Kesinti': 0.0,
             'Teşvik Gün Sayısı': destek,
             'Teşvik Saat Sayısı': destek * GUNLUK_SAAT,
             'Uyarı': ' | '.join(uyarilar),
@@ -1347,7 +1360,11 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None,
     # Aynı gün birden çok kategoride işaretlenmiş olabilir; mükerrer saymamak
     # için rapor günleri kazanır. Hafta sonları Cmt-Paz olduğu için ayrıktır.
     izin_gunleri -= rapor_gunleri
-    ucretsiz_gunleri -= rapor_gunleri | izin_gunleri
+    # Ücretsiz izin günleri tabandan düşüldüğü için o günlerde geçen rapor,
+    # izin ve hafta sonu ayrıca kesilmez; yoksa aynı gün iki kez sayılır.
+    rapor_gunleri -= ucretsiz_gunleri
+    izin_gunleri -= ucretsiz_gunleri
+    hafta_sonlari -= ucretsiz_gunleri
 
     # (d) Dönem içindeki hafta içine denk gelen resmi tatiller. Tam gün tatiller
     # tanımı gereği izin/rapor kümelerine giremez; arife ise yarım iş günü
@@ -1355,23 +1372,22 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None,
     tam_tatil_gunleri = {
         g for g in gun_araligi(donem_ilk, donem_son)
         if g in tatiller and g.weekday() < 5
-    }
+    } - ucretsiz_gunleri
     arife_gunleri = {
         g for g in gun_araligi(donem_ilk, donem_son)
         if g in yarim_tatiller and g.weekday() < 5 and g not in tatiller
-    } - (rapor_gunleri | izin_gunleri | ucretsiz_gunleri)
+    } - (rapor_gunleri | izin_gunleri | ucretsiz_gunleri)   # ücretsiz gün zaten tabandan düştü
     resmi_tatil_kesintisi = len(tam_tatil_gunleri) + 0.5 * len(arife_gunleri)
 
     # Arifeye denk gelen izin/rapor günleri yarım sayılır.
     rapor_kesintisi = gun_toplami(rapor_gunleri, tatiller, yarim_tatiller)
-    ucretsiz_kesintisi = gun_toplami(ucretsiz_gunleri, tatiller, yarim_tatiller)
     kismi_kesinti = kismi_gun_kesintisi(kismi_saat)
     yillik_kesinti = (gun_toplami(izin_gunleri, tatiller, yarim_tatiller)
                       + yillik_izin_kismi_kesintisi(yarim_gun_toplami))
 
     toplam_kesinti = kesintiyi_tam_gune_tamamla(
         rapor_kesintisi + len(hafta_sonlari) + yillik_kesinti
-        + resmi_tatil_kesintisi + ucretsiz_kesintisi + kismi_kesinti
+        + resmi_tatil_kesintisi + kismi_kesinti
     )
     destek_gun = max(0.0, taban - toplam_kesinti)
 
@@ -1381,7 +1397,7 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None,
         'Yıllık İzin Kesintisi': float(yillik_kesinti),
         'Resmi Tatil Kesintisi': float(resmi_tatil_kesintisi),
         'Kısmi Rapor Kesintisi': kismi_kesinti,
-        'Ücretsiz İzin Kesintisi': float(ucretsiz_kesintisi),
+        'Ücretsiz İzin Günü': float(len(ucretsiz_gunleri)),
         'Toplam Kesinti': float(toplam_kesinti),
         'Teşvik Gün Sayısı': destek_gun,
         'Teşvik Saat Sayısı': destek_gun * GUNLUK_SAAT,

@@ -35,7 +35,23 @@ satırında yalnızca kimlik ve tarih bilgileri bulunsa bile teşviki hesaplanı
 
 | Kesinti | Tanım |
 |---|---|
-| Ücretsiz izin | Ücret ödenmediği ve SGK primi yatmadığı için o günlerde teşvikten yararlanılamaz |
+| Ücretsiz izin | Kesinti değildir: çalışılmayan süre sayıldığı için **teşvik tabanını daraltır** (aşağıya bakınız) |
+
+### Ücretsiz izin
+
+Ücret ödenmediği ve SGK primi yatmadığı için personel o günlerde çalışmış
+sayılmaz. Bu yüzden kesinti olarak değil, **teşvik tabanını daraltarak**
+uygulanır ve işe giriş/çıkış gibi **takvim günü** olarak sayılır — hafta sonu ve
+resmi tatil dahil. Rapor durumundan bağımsızdır.
+
+| Durum (31 günlük ay) | Teşvik |
+|---|---|
+| Ayın tamamı ücretsiz izinli | **0 gün** |
+| 1–21 çalıştı, 22–31 ücretsiz izinli | **21 gün** |
+| Ay ortasında 11 gün ücretsiz izin | **20 gün** |
+
+Ücretsiz izne denk gelen rapor, izin veya hafta sonu ayrıca kesilmez; o gün
+zaten tabandan düşmüştür.
 
 ### Raporu olmayan personel
 

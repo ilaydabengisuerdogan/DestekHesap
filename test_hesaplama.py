@@ -256,16 +256,29 @@ def test_ucretsiz_izin_raporsuz_personelde_de_duser():
     sonuc = hesapla([satir(1, 'Ücretsiz İzin', '2026-07-27', '2026-07-31', 5,
                            'Kişisel Nedenler')])
     assert sonuc['Rapor Durumu'] == 'Raporsuz'
-    assert sonuc['Ücretsiz İzin Kesintisi'] == 5
-    assert sonuc['Teşvik Gün Sayısı'] == 25
+    # 31 günlük ayın 5 günü ücretsiz izinli: 26 gün çalışmış sayılır.
+    assert sonuc['Ücretsiz İzin Günü'] == 5
+    assert sonuc['Teşvik Gün Sayısı'] == 26
 
 
-def test_ucretsiz_izin_resmi_tatili_kapsamaz():
-    """13-24 Temmuz: 15 Temmuz tatil olduğu için 9 iş günü düşer."""
+def test_ucretsiz_izin_takvim_gunu_olarak_sayilir():
+    """
+    Ücretsiz izin çalışılmayan süredir; hafta sonu ve resmi tatil dahil takvim
+    günü olarak sayılır. 13-24 Temmuz 12 takvim günüdür (15 Temmuz tatili de
+    içinde); geriye 19 gün çalışma kalır.
+    """
     sonuc = hesapla([satir(1, 'Ücretsiz İzin', '2026-07-13', '2026-07-24', 9,
                            'Kişisel Nedenler')])
-    assert sonuc['Ücretsiz İzin Kesintisi'] == 9
-    assert sonuc['Teşvik Gün Sayısı'] == 21
+    assert sonuc['Ücretsiz İzin Günü'] == 12
+    assert sonuc['Teşvik Gün Sayısı'] == 19
+
+
+def test_tum_ay_ucretsiz_izinli_personelin_tesviki_sifir():
+    """Ay boyunca çalışmamış personel teşvik alamaz."""
+    sonuc = hesapla([satir(1, 'Ücretsiz İzin', '2026-07-01', '2026-07-31', 23,
+                           'Kişisel Nedenler')])
+    assert sonuc['Ücretsiz İzin Günü'] == 31
+    assert sonuc['Teşvik Gün Sayısı'] == 0
 
 
 def test_ucretsiz_izin_raporla_birlikte_mukerrer_sayilmaz():
@@ -273,10 +286,12 @@ def test_ucretsiz_izin_raporla_birlikte_mukerrer_sayilmaz():
         rapor(1, '2026-07-09', '2026-07-10', 2),
         satir(1, 'Ücretsiz İzin', '2026-07-09', '2026-07-10', 2, 'Kişisel Nedenler'),
     ])
-    assert sonuc['Rapor Gün'] == 2
-    assert sonuc['Ücretsiz İzin Kesintisi'] == 0
-    # 2 rapor + 2 hafta sonu + 1 resmi tatil
-    assert sonuc['Toplam Kesinti'] == 5
+    # Ücretsiz izin günü tabandan düştüğü için o gün ayrıca rapor kesintisi
+    # olarak sayılmaz; taban 29, üstünden 2 hafta sonu + 1 resmi tatil düşer.
+    assert sonuc['Rapor Gün'] == 0
+    assert sonuc['Ücretsiz İzin Günü'] == 2
+    assert sonuc['Toplam Kesinti'] == 3
+    assert sonuc['Teşvik Gün Sayısı'] == 26
 
 
 def _kidem_satiri(ise_baslama, **kw):
@@ -459,7 +474,7 @@ def test_rapor_tespiti_yazimdan_etkilenmez(turu, nedeni):
 @pytest.mark.parametrize('yazim', ['Ücretsiz İzin', 'ÜCRETSİZ İZİN', 'ucretsiz izin'])
 def test_ucretsiz_izin_yazimi_onemsiz(yazim):
     sonuc = hesapla([satir(1, yazim, '2026-07-27', '2026-07-31', 5)])
-    assert sonuc['Ücretsiz İzin Kesintisi'] == 5
+    assert sonuc['Ücretsiz İzin Günü'] == 5
 
 
 def test_mazeret_izni_yazimi_ne_olursa_olsun_dusmez():

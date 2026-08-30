@@ -223,6 +223,17 @@ Belirleyici kriter, personelin o ay icinde SAGLIK RAPORU
   durumundan bagimsiz olarak duser.
 
 
+  UCRETSIZ IZIN
+  ......................................................
+  Ucret odenmedigi icin personel o gunlerde calismis
+  sayilmaz. Kesinti olarak degil, tesvik tabanini
+  daraltarak uygulanir ve takvim gunu olarak sayilir
+  (hafta sonu ve resmi tatil dahil).
+
+  31 gunluk ayda:
+    Ayin tamami ucretsiz izinli      -> tesvik 0 gun
+    1-21 calisti, 22-31 ucretsiz     -> tesvik 21 gun
+
   RAPORU OLMAYAN PERSONEL
   ......................................................
   Ucretsiz izin disinda hicbir izin dusmez. Yillik izin,
@@ -380,7 +391,8 @@ baslangic ve bitis tarihleri ayni sirada yazilir.
   Resmi Tatil Kesintisi         Tatil nedeniyle dusen gun
                                 (arife 0,5 gun)
   Kismi Rapor Kesintisi         Saatlik raporlardan dusen gun
-  Ucretsiz Izin Kesintisi       Ucretsiz izinden dusen gun
+  Ucretsiz Izin Gunu            Ucretsiz izinli takvim gunu
+                                (tabandan duser, kesinti degil)
   Toplam Kesinti                Yukaridakilerin toplami
   Tesvik Saat Sayisi            Tesvik Gun Sayisi x 8
   Uyari                         Tatil takvimi notu, kidem sarti

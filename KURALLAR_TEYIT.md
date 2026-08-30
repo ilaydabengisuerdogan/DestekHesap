@@ -152,18 +152,23 @@ Aşağıdakiler teşvikten düşer:
 | # | Kural | Kaynak | Durum |
 |---|---|---|---|
 | H1 | Ücretsiz izin, rapor durumundan bağımsız olarak **her personelde** düşer | İK-2, İK-3 | Teyitli |
-| H2 | Yalnızca **iş günleri** düşer; hafta sonu ve resmi tatil sayılmaz | VARSAYIM | **Teyit gerekiyor** |
+| H2 | **Takvim günü** olarak sayılır; hafta sonu ve resmi tatil dahil | Kullanıcı kararı | Teyitli |
+| H3 | Kesinti değil, **teşvik tabanı daraltması**; çalışılan gün üzerinden hesaplanır | Kullanıcı kararı | Teyitli |
 
-> ### ⚠ H2 — en önemli açık soru
+> ### H2/H3 — karara bağlandı
 >
-> Ücretsiz izinde SGK primi yatmıyorsa, o dönemin hafta sonlarında da yatmıyor
-> olabilir. Belgeler bu noktayı belirtmiyor, literal okuma yapıldı.
+> Önceden yalnızca iş günleri düşüyordu; ayın tamamı ücretsiz izinli bir personel
+> 9 gün teşvik alıyordu. Ücretsiz izinde çalışma da ücret de olmadığı için bu
+> yanlıştı.
 >
-> **Örnek:** Onur Kurt 13–24 Temmuz ücretsiz izinde.
-> - Şu anki hesap: 9 iş günü düşer → destek 21 gün
-> - Hafta sonları da düşerse: 9 + 4 hafta sonu (18-19, 11-12 hariç) = 12 gün → destek 18
+> **Yeni kural:** ücretsiz izin, işe giriş/çıkış gibi çalışılmayan süre sayılır ve
+> teşvik tabanından takvim günü olarak düşer.
 >
-> **Sorulacak soru:** Ücretsiz izin döneminde hafta sonları da teşvikten düşmeli mi?
+> **Örnek:** 13–24 Temmuz ücretsiz izinli personel (12 takvim günü).
+> - Eski hesap: 9 iş günü kesinti → teşvik 21 gün
+> - **Yeni hesap:** 31 − 12 = 19 gün çalışmış → **teşvik 19 gün**
+>
+> Ayın tamamı ücretsiz izinli personelin teşviki artık **0**.
 
 ---
 
@@ -235,7 +240,7 @@ var, ama 2026 dışındakilerin dini bayram tarihleri hesaplanmıştır.
 | # | Soru | Etkisi |
 |---|---|---|
 | 1 | Raporlu personelde yıllık izin düşüyor mu? (D3) | 5 personel, toplam 15 gün |
-| 2 | Ücretsiz izinde hafta sonları da düşmeli mi? (H2) | Ücretsiz izinli her personel |
+| ~~2~~ | ~~Ücretsiz izinde hafta sonları da düşmeli mi? (H2)~~ — *karara bağlandı: evet, takvim günü sayılır* | — |
 | ~~3~~ | ~~Arife günleri tam gün mü, yarım gün mü?~~ **Kapandı: yarım gün** | — |
 | 4 | Hesaplanan dini bayram tarihleri Diyanet'le uyuşuyor mu? (I) | 2027 ve sonrası |
 | 5 | `Destek Saat = Gün × 8` doğru mu? (A2) | Tüm çıktı |

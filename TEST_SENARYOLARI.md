@@ -79,7 +79,7 @@ Her kuralı tek başına izole eden sentetik senaryolar.
 
 | # | Senaryo | Beklenen sonuç |
 |---|---|---|
-| 28 | Raporsuz personelde ücretsiz izin | 27–31 Temmuz, 5 gün düşer → destek 25 |
+| 28 | Raporsuz personelde ücretsiz izin | 27–31 Temmuz, 5 takvim günü → destek 26 |
 | 29 | Resmi tatili kapsamaz | 13–24 Temmuz, 15 Temmuz tatil → 9 iş günü düşer |
 | 30 | Raporla aynı günde | Mükerrer sayılmaz, rapor günü kazanır |
 
