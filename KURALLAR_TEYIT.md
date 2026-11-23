@@ -84,6 +84,27 @@ Aşağıdakiler teşvikten düşer:
 |---|---|---|---|
 | E1 | Rapor haftasının hafta sonu düşer | İK-1 | Teyitli |
 | E2 | Rapor birden çok haftaya yayılırsa **her** haftanın hafta sonu düşer | İK-1 | Teyitli |
+| E4 | Kesintiye giren **iznin** düştüğü haftanın hafta sonu da düşer | İK revizyonu | Teyitli |
+| E5 | Aynı hafta hem rapor hem izin içeriyorsa hafta sonu **bir kez** düşer | Mükerrer sayım kuralı | Teyitli |
+
+> ### E4 — İK revizyonu ile eklendi
+>
+> Kural, haftalık çalışma saatinin tamamlanamadığı her haftada hafta sonunun
+> kaybedilmesi; bu yalnızca rapor haftalarına özgü değil. Personelin o ay
+> kullandığı yıllık izin de haftayı eksiltir ve o haftanın hafta sonu düşer.
+>
+> **İK örneği:** 2. haftada 2 saatlik eksik çalışma, farklı bir haftada 2 gün
+> yıllık izin, yine farklı bir haftada 1 gün resmi tatil.
+>
+> 0,5 (eksik saat) + 2 (rapor haftasının hafta sonu) + 1 (resmi tatil)
+> + 2 (yıllık izin) + 2 (yıllık izin haftasının hafta sonu) = **7,5 → 8 gün**
+>
+> Resmi tatilin düştüğü haftanın hafta sonu sayılmaz; örnekteki toplam bunu
+> doğruluyor. Kural raporlu personele özgüdür: raporsuzda yıllık izin zaten
+> hiç düşmediği için hafta sonu da düşmez.
+>
+> Gerçek Temmuz verisinde bu değişiklik 5 personelde 2'şer gün kayba yol açtı;
+> toplam destek 6383'ten 6373 güne indi.
 | E3 | Hafta sonu yalnızca **dönem ayının içine düşerse** sayılır | İK-1 | Teyitli |
 
 > ### ⚠ E3'ün sonucu — teyit edilmesi iyi olur

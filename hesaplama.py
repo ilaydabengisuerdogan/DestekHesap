@@ -1318,21 +1318,17 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None,
         if not tam_gun_mu:
             kismi_saat += satir['quantityInHours']
 
-    # (b) Raporun değdiği her haftanın hafta sonu; yalnızca dönem ayına düşen
-    # günler sayılır. Ay sonu haftasının hafta sonu bir sonraki aya taşıyorsa
-    # bu dönemden düşmez (örn. 27-31 Temmuz haftasının 1-2 Ağustos'u).
-    hafta_sonlari = set()
-    for pazartesi in rapor_haftalari:
-        for kayma in (5, 6):
-            gun = pazartesi + dt.timedelta(days=kayma)
-            if donem_ilk <= gun <= donem_son:
-                hafta_sonlari.add(gun)
+    # (b) Hafta sonu kaybı yalnızca rapor haftalarında değil, haftalık çalışma
+    # saatinin tamamlanamadığı HER haftada doğar; kesintiye giren izin
+    # haftaları da buna dahildir. İzin haftaları (c) bölümünde toplandığı için
+    # hafta sonu hesabı oranın altına alındı.
 
     # (c) Yıllık izin günleri. Mazeret ve evlilik izni düşmez. Bir yılını
     # doldurmamış personelin yıllık izni hak edilmemiş sayıldığı için düşmez.
     # Tam gün kayıtları takvime, yarım günler ayrı havuza gider: yarım günler
     # ay boyunca toplanıp yukarı yuvarlanır (Kural 3).
     izin_gunleri = set()
+    izin_haftalari = set()
     yarim_gun_toplami = 0.0
     kidemsiz_atlanan = 0
     for satir, baslangic, bitis in diger_satirlar:
@@ -1346,16 +1342,32 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None,
             yarim_gun_toplami += (
                 1.0 if satir['quantityInHours'] > YILLIK_IZIN_TAM_GUN_ESIGI_SAAT else 0.5
             )
+            # Kısmi izin de haftalık çalışma saatini eksiltir; saatlik raporda
+            # olduğu gibi o haftanın hafta sonu düşer.
+            for gun in gun_araligi(baslangic, bitis):
+                izin_haftalari.add(hafta_basi(gun))
             continue
         for gun in gun_araligi(baslangic, bitis):
             if is_gunu(gun, tatiller):
                 izin_gunleri.add(gun)
+            izin_haftalari.add(hafta_basi(gun))
 
     if kidemsiz_atlanan:
         uyarilar.append(
             f"{kidemsiz_atlanan} yıllık izin kaydı, 1 yıllık kıdem şartı "
             f"dolmadığı için kesintiye dahil edilmedi (İş Kanunu Md. 53)"
         )
+
+    # Haftalık çalışma saatinin tamamlanamadığı haftaların hafta sonu düşer:
+    # hem rapor haftaları hem de kesintiye giren izin haftaları. Yalnızca dönem
+    # ayına düşen günler sayılır; ay sonu haftasının hafta sonu bir sonraki aya
+    # taşıyorsa bu dönemden düşmez (örn. 27-31 Temmuz haftasının 1-2 Ağustos'u).
+    hafta_sonlari = set()
+    for pazartesi in rapor_haftalari | izin_haftalari:
+        for kayma in (5, 6):
+            gun = pazartesi + dt.timedelta(days=kayma)
+            if donem_ilk <= gun <= donem_son:
+                hafta_sonlari.add(gun)
 
     # Aynı gün birden çok kategoride işaretlenmiş olabilir; mükerrer saymamak
     # için rapor günleri kazanır. Hafta sonları Cmt-Paz olduğu için ayrıktır.

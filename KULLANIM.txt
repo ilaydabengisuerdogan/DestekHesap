@@ -248,7 +248,9 @@ Belirleyici kriter, personelin o ay icinde SAGLIK RAPORU
        Rapor araligina dusen is gunleri.
 
     2. Hafta sonu
-       Raporun degdigi HER haftanin Cumartesi ve Pazar gunleri.
+       Haftalik calisma saatinin tamamlanamadigi HER haftanin
+       Cumartesi ve Pazar gunleri. Yalnizca rapor haftalari
+       degil, kesintiye giren izin haftalari da sayilir.
 
     3. Yillik izin
        O ay icinde kullanilan yillik izin gunleri.
@@ -315,14 +317,14 @@ Belirleyici kriter, personelin o ay icinde SAGLIK RAPORU
 
      2 saat eksik calisma ....... 0,5 gun
      o haftanin hafta sonu ...... 2,0 gun
-     yillik izin ................ 2,0 gun
      resmi tatil ................ 1,0 gun
+     yillik izin ................ 2,0 gun
+     yillik iznin hafta sonu .... 2,0 gun
      ------------------------------------
-     ------------------------------------
-     Kirilim toplami ............ 5,5 gun
-     TOPLAM KESINTI (tamamlanan)  6,0 gun
+     Kirilim toplami ............ 7,5 gun
+     TOPLAM KESINTI (tamamlanan)  8,0 gun
 
-     Destek = 30 - 6 = 24 gun
+     Destek = 30 - 8 = 22 gun
 
      Not: Toplam kesinti tam gune yukari tamamlanir.
      5,5 gun kesinti 6 gun sayilir. Kirilim satirlarinda

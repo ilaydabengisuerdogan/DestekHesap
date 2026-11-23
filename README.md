@@ -65,7 +65,7 @@ Haftalık çalışma saatini tamamlayamadığı için şu kalemler de düşülü
 | Kesinti | Tanım |
 |---|---|
 | Rapor günleri | Rapor aralığına düşen iş günleri (hafta sonu ve resmi tatil hariç) |
-| Hafta sonu | Raporun değdiği **her** haftanın Cumartesi ve Pazar günleri |
+| Hafta sonu | Haftalık çalışma saatinin tamamlanamadığı **her** haftanın Cumartesi ve Pazar günleri: hem raporun hem de kesintiye giren iznin değdiği haftalar |
 | Yıllık izin | O ay içinde kullanılan yıllık izin günleri — kıdem şartına bağlı, aşağıya bakınız |
 | Resmi tatil | O ay içindeki hafta içine denk gelen resmi tatiller |
 | Kısmi rapor | Saatlik raporlar birikimli toplanır; artan kısım ≤ 4 saat ise yarım gün, > 4 saat ise tam gün |
@@ -347,7 +347,7 @@ Veri dosyalarını depoya eklemeyin.
 ## Bakım notları
 
 - **Arife günleri yarım gün** sayılır: Ramazan ve Kurban arifeleri ile 28 Ekim.
-- **Toplam kesinti tam güne yukarı tamamlanır** (5,5 → 6). Yarım günler arife ve
+- **Toplam kesinti tam güne yukarı tamamlanır** (7,5 → 8). Yarım günler arife ve
   kısmi izinlerden gelir; kırılım kolonlarında ayrıntı korunur, yuvarlama yalnızca
   toplama uygulanır. Teşvik tabanı tam sayı olduğu için teşvik günü de tam çıkar.
   O güne denk gelen rapor/izin 0,5 gün, çalışılmışsa resmi tatil kesintisi 0,5 gündür.

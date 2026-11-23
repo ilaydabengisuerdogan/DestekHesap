@@ -33,16 +33,19 @@ hangi personelin hangi değerinin kaydığını anında görebilmek.
 | Çalışan | Rapor türü | Rapor | Hafta sonu | Yıllık izin | Resmi tatil | Kısmi | Toplam kesinti | Destek günü |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
 | 1043 | Kadın Doğum İstirahat Raporu | 12 | 4 | 0 | 1 | 0 | 17 | **13** |
-| 1079 | Hastalık Raporu | 1 | 2 | 5 | 1 | 0 | 9 | **21** |
-| 1179 | Hastalık Raporu | 9 | 2 | 4 | 1 | 0 | 16 | **14** |
-| 1192 | Hastalık Raporu | 1 | 2 | 2 | 1 | 0 | 6 | **24** |
+| 1079 | Hastalık Raporu | 1 | 4 | 5 | 1 | 0 | 11 | **19** |
+| 1179 | Hastalık Raporu | 9 | 4 | 4 | 1 | 0 | 18 | **12** |
+| 1192 | Hastalık Raporu | 1 | 4 | 2 | 1 | 0 | 8 | **22** |
 | 1297 | Hastalık Raporu | 2 | 2 | 0 | 1 | 0 | 5 | **25** |
-| 1303 | Hastalık Raporu | 1 | 2 | 2 | 1 | 0 | 6 | **24** |
+| 1303 | Hastalık Raporu | 1 | 4 | 2 | 1 | 0 | 8 | **22** |
 | 1333 | Hastalık Raporu | 3 | 0 | 0 | 1 | 0 | 4 | **26** |
-| 1345 | Hastalık Raporu | 1 | 0 | 2 | 1 | 0 | 4 | **26** |
+| 1345 | Hastalık Raporu | 1 | 2 | 2 | 1 | 0 | 6 | **24** |
 
-1333 ve 1345'in hafta sonu kesintisi sıfır: ikisinin de raporu 27–31 Temmuz haftasında
-ve o haftanın hafta sonu Ağustos'a taşıyor.
+1333'ün hafta sonu kesintisi sıfır: raporu 27–31 Temmuz haftasında ve o haftanın
+hafta sonu Ağustos'a taşıyor; yıllık izni de yok.
+
+Yıllık izin haftasının hafta sonu da düşmeye başlayınca (İK revizyonu) beş
+personel 2'şer gün kaybetti; toplam destek 6383'ten **6373** güne indi.
 
 ---
 
@@ -160,14 +163,18 @@ aşıyorsa tam gün olarak düşülür.
 | Kalem | Gün |
 |---|---:|
 | 2 saatlik eksik çalışma | 0,5 |
-| O haftanın hafta sonu | 2,0 |
-| Yıllık izin | 2,0 |
+| Rapor haftasının hafta sonu | 2,0 |
 | Resmi tatil | 1,0 |
-| Kırılım toplamı | 5,5 |
-| **Toplam kesinti** (tam güne tamamlanır) | **6** |
-| Destek günü | **24** |
+| Yıllık izin | 2,0 |
+| **Yıllık izin haftasının hafta sonu** | **2,0** |
+| Kırılım toplamı | 7,5 |
+| **Toplam kesinti** (tam güne tamamlanır) | **8** |
+| Destek günü | **22** |
 
-Toplam kesinti tam güne yukarı tamamlanır (5,5 → 6), böylece teşvik günü her
+Hafta sonu kaybı yalnızca rapor haftasında değil, kesintiye giren iznin düştüğü
+haftada da doğar; bu örnekte iki ayrı haftadan toplam 4 gün düşer.
+
+Toplam kesinti tam güne yukarı tamamlanır (7,5 → 8), böylece teşvik günü her
 zaman tam sayı çıkar. Kırılım kolonlarında yarım gün ayrıntısı korunur.
 
 ---

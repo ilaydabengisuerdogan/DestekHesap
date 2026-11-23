@@ -57,17 +57,17 @@ def hesapla(satirlar, donem=TEMMUZ, tatiller=TATILLER):
 # (rapor günü, hafta sonu, yıllık izin, resmi tatil, kısmi rapor, destek günü)
 GERCEK_BEKLENEN = {
     1043: (12, 4, 0, 1, 0.0, 13.0),
-    1079: (1, 2, 5, 1, 0.0, 21.0),
-    1179: (9, 2, 4, 1, 0.0, 14.0),
-    1192: (1, 2, 2, 1, 0.0, 24.0),
+    1079: (1, 4, 5, 1, 0.0, 19.0),
+    1179: (9, 4, 4, 1, 0.0, 12.0),
+    1192: (1, 4, 2, 1, 0.0, 22.0),
     1297: (2, 2, 0, 1, 0.0, 25.0),
-    1303: (1, 2, 2, 1, 0.0, 24.0),
+    1303: (1, 4, 2, 1, 0.0, 22.0),
     1333: (3, 0, 0, 1, 0.0, 26.0),
-    1345: (1, 0, 2, 1, 0.0, 26.0),
+    1345: (1, 2, 2, 1, 0.0, 24.0),
 }
 
 GERCEK_PERSONEL_SAYISI = 215
-GERCEK_TOPLAM_DESTEK = 6383.0
+GERCEK_TOPLAM_DESTEK = 6373.0
 
 
 # Gerçek veri dosyası KVKK gereği depoda tutulmaz ve proje klasörü dışında
@@ -222,7 +222,70 @@ def test_raporluda_yillik_izin_duser():
         satir(1, 'Yıllık İzin', '2026-07-20', '2026-07-21', 2),
     ])
     assert sonuc['Yıllık İzin Kesintisi'] == 2
-    # Yıllık izin haftası (20-26) rapor haftası olmadığı için hafta sonu düşmez.
+    # Rapor haftası (6-12) ve yıllık izin haftası (20-26) ayrı ayrı hafta sonu
+    # kaybettirir: 11-12 ve 25-26 Temmuz = 4 gün.
+    assert sonuc['Hafta Sonu Kesintisi'] == 4
+    assert sonuc['Teşvik Gün Sayısı'] == 22
+
+
+def test_yillik_izin_haftasinin_hafta_sonu_da_duser():
+    """
+    İK revizyonu: haftalık çalışma saatini tamamlayamayan personel, o haftanın
+    hafta sonunu kaybeder. Bu yalnızca rapor haftaları için değil, kesintiye
+    giren izin haftaları için de geçerlidir.
+
+    Rapor 9 Temmuz (hafta 6-12) -> hafta sonu 11-12
+    Yıllık izin 20-21 Temmuz (hafta 20-26) -> hafta sonu 25-26
+    """
+    sonuc = hesapla([
+        rapor(1, '2026-07-09', '2026-07-09', 1),
+        satir(1, 'Yıllık İzin', '2026-07-20', '2026-07-21', 2),
+    ])
+    assert sonuc['Hafta Sonu Kesintisi'] == 4
+
+
+def test_ayni_haftadaki_rapor_ve_izin_hafta_sonunu_iki_kez_dusurmez():
+    """Rapor ve yıllık izin aynı haftadaysa o haftanın hafta sonu bir kez düşer."""
+    sonuc = hesapla([
+        rapor(1, '2026-07-06', '2026-07-06', 1),
+        satir(1, 'Yıllık İzin', '2026-07-08', '2026-07-09', 2),
+    ])
+    assert sonuc['Hafta Sonu Kesintisi'] == 2
+
+
+def test_raporsuzda_yillik_izin_hafta_sonu_dusurmez():
+    """Kural raporlu personele özgüdür; raporsuzda yıllık izin hiç düşmez."""
+    sonuc = hesapla([satir(1, 'Yıllık İzin', '2026-07-20', '2026-07-21', 2)])
+    assert sonuc['Rapor Durumu'] == 'Raporsuz'
+    assert sonuc['Hafta Sonu Kesintisi'] == 0
+    assert sonuc['Teşvik Gün Sayısı'] == 30
+
+
+def test_kismi_yillik_izin_haftasinin_hafta_sonu_duser():
+    """
+    Yarım günlük yıllık izin de haftalık çalışma saatini eksiltir; saatlik
+    raporda olduğu gibi o haftanın hafta sonu düşer.
+    """
+    sonuc = hesapla([
+        rapor(1, '2026-07-09', '2026-07-09', 1),
+        satir(1, 'Yıllık İzin', '2026-07-21', '2026-07-21', 0.25),
+    ])
+    assert sonuc['Hafta Sonu Kesintisi'] == 4
+
+
+def test_dusmeyen_izin_turleri_hafta_sonu_da_dusurmez():
+    """Mazeret ve evlilik izni kesintiye girmediği için hafta sonu da kaybettirmez."""
+    sonuc = hesapla([
+        rapor(1, '2026-07-09', '2026-07-09', 1),
+        satir(1, 'Mazeret İzni', '2026-07-20', '2026-07-21', 2, 'Doğum Günü İzni'),
+    ])
+    assert sonuc['Hafta Sonu Kesintisi'] == 2
+
+
+def test_kidemsiz_yillik_izin_hafta_sonu_da_dusurmez():
+    """Hak edilmemiş yıllık izin düşmediği için haftasının hafta sonu da düşmez."""
+    sonuc = hesapla([_kidem_rapor('2026-03-02'), _kidem_satiri('2026-03-02')])
+    assert sonuc['Yıllık İzin Kesintisi'] == 0
     assert sonuc['Hafta Sonu Kesintisi'] == 2
 
 
@@ -319,7 +382,8 @@ def test_bir_yili_dolduran_kidemde_yillik_izin_duser():
     sonuc = hesapla([_kidem_rapor('2020-01-15'), _kidem_satiri('2020-01-15')])
     assert sonuc['Yıllık İzin Kesintisi'] == 2
     assert sonuc['Uyarı'] == ''
-    assert sonuc['Toplam Kesinti'] == 6
+    # 1 rapor + 4 hafta sonu (rapor ve izin haftaları) + 2 izin + 1 resmi tatil
+    assert sonuc['Toplam Kesinti'] == 8
 
 
 @pytest.mark.parametrize('ise_baslama, beklenen', [
@@ -405,14 +469,20 @@ def test_isten_cikis_ornegi_1002():
 
 
 def test_cikis_tarihi_yoksa_taban_30():
-    """Aynı veri, çıkış tarihi olmadan: 30 - 7 = 23"""
+    """
+    Aynı veri, çıkış tarihi olmadan: 30 - 9 = 21.
+
+    Çıkış tarihi varken izin haftasının hafta sonu (18-19 Temmuz) kapsam
+    dışında kalıyordu; burada kapsama girdiği için 2 gün daha düşer.
+    """
     sonuc = hesapla([
         _tarihli(rapor(1002, '2026-07-07', '2026-07-08', 2), ise='2020-01-01'),
         _tarihli(satir(1002, 'Yıllık İzin', '2026-07-13', '2026-07-15', 3,
                        'Ücretli Yıllık İzin'), ise='2020-01-01'),
     ])
-    assert sonuc['Toplam Kesinti'] == 7
-    assert sonuc['Teşvik Gün Sayısı'] == 23
+    assert sonuc['Hafta Sonu Kesintisi'] == 4
+    assert sonuc['Toplam Kesinti'] == 9
+    assert sonuc['Teşvik Gün Sayısı'] == 21
 
 
 def test_cikis_sonrasi_gunler_kesintiye_girmez():
@@ -1177,9 +1247,15 @@ def test_kullanici_ornegi():
     """
     Kullanıcının verdiği örnek: 2. haftada 2 saatlik eksik çalışma, farklı bir
     haftada 2 gün yıllık izin, yine farklı bir haftada 1 gün resmi tatil.
-    Kırılım: 0,5 + 2 (hafta sonu) + 2 (yıllık izin) + 1 (resmi tatil) = 5,5 gün.
+    Kırılım (İK revizyonu):
+      0,5  2 saatlik eksik çalışma
+      2,0  rapor haftasının hafta sonu
+      1,0  resmi tatil
+      2,0  yıllık izin
+      2,0  yıllık izin haftasının hafta sonu
+      ----
+      7,5  -> tam güne yukarı tamamlanır -> 8 gün
 
-    İK kararı gereği toplam kesinti tam güne yukarı tamamlanır: 5,5 -> 6.
     Kırılım kolonlarında yarım gün ayrıntısı olduğu gibi durur.
     """
     sonuc = hesapla([
@@ -1189,8 +1265,9 @@ def test_kullanici_ornegi():
     ])
     # 0,5 gün eksik çalışma + 2 gün hafta sonu (11-12) + 2 gün yıllık izin + 1 gün 15 Temmuz
     assert sonuc['Kısmi Rapor Kesintisi'] == 0.5      # kırılımda yarım gün duruyor
-    assert sonuc['Toplam Kesinti'] == 6               # toplam yukarı tamamlandı
-    assert sonuc['Teşvik Gün Sayısı'] == 24
+    assert sonuc['Hafta Sonu Kesintisi'] == 4         # rapor + yıllık izin haftası
+    assert sonuc['Toplam Kesinti'] == 8               # 7,5 yukarı tamamlandı
+    assert sonuc['Teşvik Gün Sayısı'] == 22
 
 
 @pytest.mark.parametrize('ham, beklenen', [
