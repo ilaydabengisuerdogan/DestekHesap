@@ -9,6 +9,7 @@ Sonuç: dist\\TeknoparkDestekHesaplama.exe
 Bu dosya hedef bilgisayarda Python kurulumu ve internet bağlantısı gerektirmez.
 """
 
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -60,7 +61,10 @@ def main():
 
     ikon = KOK / 'ikon.ico'
     if ikon.exists():
+        # --icon exe'nin dosya ikonunu belirler; --add-data ise ikonu paketin
+        # içine koyar ki uygulama penceresi de aynı ikonu gösterebilsin.
         argumanlar += ['--icon', str(ikon)]
+        argumanlar += ['--add-data', f"{ikon}{os.pathsep}."]
 
     print("Paketleniyor, bu birkaç dakika sürebilir...\n")
     PyInstaller.__main__.run(argumanlar)

@@ -10,6 +10,7 @@ Hesaplama mantığı hesaplama.py içindedir; bu dosya yalnızca arayüzdür.
 import datetime as dt
 import os
 import queue
+import sys
 import threading
 import tkinter as tk
 import traceback
@@ -310,6 +311,7 @@ class Uygulama(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Teknopark Destek Hesaplama")
+        self._ikonu_ayarla()
         self.geometry("1180x760")
         self.minsize(980, 640)
         self.configure(bg=ZEMIN)
@@ -322,6 +324,26 @@ class Uygulama(tk.Tk):
 
         self._stil_kur()
         self._arayuzu_kur()
+
+    def _ikonu_ayarla(self):
+        """
+        Pencere ve görev çubuğu ikonu.
+
+        Paketlenmiş exe'de dosya PyInstaller'ın açtığı geçici klasörden
+        (_MEIPASS) okunur. İkon bulunamazsa uygulama ikonsuz açılır; eksik
+        ikon yüzünden program açılmamazlık etmesin.
+        """
+        if getattr(sys, 'frozen', False):
+            kok = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+        else:
+            kok = os.path.dirname(os.path.abspath(__file__))
+        ikon = os.path.join(kok, 'ikon.ico')
+        if not os.path.exists(ikon):
+            return
+        try:
+            self.iconbitmap(default=ikon)
+        except tk.TclError:
+            pass
 
     # ------------------------------------------------------------- görünüm
 

@@ -38,6 +38,9 @@ ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayName={#Uygulama}
 UninstallDisplayIcon={app}\{#CalisanExe}
 
+; Kurulum dosyasinin kendi ikonu
+SetupIconFile=ikon.ico
+
 [Languages]
 Name: "turkce"; MessagesFile: "compiler:Languages\Turkish.isl"
 
