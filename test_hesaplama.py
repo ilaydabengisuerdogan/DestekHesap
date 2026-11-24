@@ -621,11 +621,11 @@ def test_ekran_filtresi_olcutu_kopyalamaz():
     katmanindaki kesintili_personel() cagrilmali. Bir kez kopyalandigi
     icin ekran ile '_kesintili' dosyasi ayri sonuc vermisti.
     """
-    kaynak = io.open(
-        os.path.join(os.path.dirname(__file__), 'masaustu.py'),
-        encoding='utf-8').read()
-    assert "'Toplam Kesinti'] > 0" not in kaynak
-    assert 'hesaplama.kesintili_personel(' in kaynak
+    for dosya in ('masaustu.py', 'app.py'):
+        kaynak = io.open(
+            os.path.join(os.path.dirname(__file__), dosya), encoding='utf-8').read()
+        assert "'Toplam Kesinti'] > 0" not in kaynak, dosya
+        assert 'hesaplama.kesintili_personel(' in kaynak, dosya
 
 
 def test_kesinti_olmadan_eksik_calisan_personel_filtreye_girer(tmp_path):

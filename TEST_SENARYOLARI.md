@@ -22,7 +22,7 @@ hangi personelin hangi değerinin kaydığını anında görebilmek.
 | # | Senaryo | Beklenen sonuç |
 |---|---|---|
 | 1 | Dönem tespiti | Dosyadan Temmuz 2026 tespit edilir |
-| 2 | Toplamlar | 215 personel, 8 raporlu, 6.383 destek günü |
+| 2 | Toplamlar | 215 personel, 8 raporlu, 6.373 destek günü |
 | 3–10 | 8 raporlu personelin kesinti kırılımı | Her birinin 6 değeri birebir sabitlenir (aşağıdaki tablo) |
 | 11 | Raporsuz personel | 207 personelin tamamı tam 30 gün alır |
 | 12 | Tatil takvimi tutarlılığı | 367 kaydın hiçbirinde takvim sapması uyarısı çıkmaz |
@@ -264,9 +264,9 @@ klasörde farklı girdi biçimleriyle çalıştırıldı:
 
 | Girdi | Personel | Raporlu | Destek günü | Sonuç |
 |---|---:|---:|---:|---|
-| Çalışan numaralı dosya | 215 | 8 | 6.383 | Geçti |
-| + Ad Soyad, Sicil No, Departman | 215 | 8 | 6.383 | Geçti |
-| Farklı kolon adları + üst başlık bloğu | 215 | 8 | 6.383 | Geçti |
+| Çalışan numaralı dosya | 215 | 8 | 6.373 | Geçti |
+| + Ad Soyad, Sicil No, Departman | 215 | 8 | 6.373 | Geçti |
+| Farklı kolon adları + üst başlık bloğu | 215 | 8 | 6.373 | Geçti |
 | Ad Soyad kimlikli, 2 sayfalı, ücretsiz izinli dosya | 15 | 2 | 408 | Geçti |
 | Hiçbiri tanınmayan kolon adları + elle eşleştirme | 15 | 2 | 408 | Geçti |
 

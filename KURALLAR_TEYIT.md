@@ -60,21 +60,21 @@ Aşağıdakiler teşvikten düşer:
 | D5 | Ücretsiz izin | İK-2, İK-3 | Teyitli |
 | D6 | Mazeret ve evlilik izni **düşmez** | İK-2, İK-3 | Teyitli |
 
-> ### ⚠ D3 için dikkat — belgeler arasında görünürde çelişki var
+> ### D3 — kapandı
 >
 > **İK-2** ve **İK-3**'teki tablo "Yıllık İzin (ücretli) → Destek Devam Eder" diyor.
-> Bu, yıllık iznin hiç düşmemesi gerektiği gibi okunabilir.
+> Bu, yıllık iznin hiç düşmemesi gerektiği gibi okunabildiği için uzun süre açık
+> soru olarak duruyordu.
 >
-> Ancak **İK-3'ün Kural 1 istisnası** şöyle diyor: *"1 yılını doldurmamış personelin
-> yıllık izin kaydı, aynı dönemde hastalık raporu alınmış olsa **dahi** düşülmemeli."*
-> Buradaki "dahi" ifadesi, **normalde raporlu personelde düştüğünü** varsayar.
+> **Revizyon metni bunu kesin olarak cevapladı:** *"haftalık çalışma saatini
+> tamamlayamaz ise ... o ay içerisinde ilave bir izin durumu var ise bu yıllık
+> izin resmi tatil vb. olabilir tüm hepsini kaybetmektedir."*
 >
-> Bu nedenle şu yorum uygulandı: tablo genel durumu (raporsuz personel) anlatıyor,
-> raporlu personelde o ayın yıllık izni düşüyor.
->
-> **Sorulacak soru:** Raporlu bir personelin o ay kullandığı yıllık izin teşvikten
-> düşüyor mu, düşmüyor mu? Düşmüyorsa Temmuz sonuçları değişir:
-> 1079 → 26, 1179 → 18, 1192 → 26, 1303 → 26, 1345 → 28 (toplam 6.383 → 6.398).
+> Yani tablo genel durumu (raporsuz personel) anlatıyor; **raporlu personelde o
+> ayın yıllık izni düşüyor**, üstelik o haftanın hafta sonu da (bkz. E4).
+> İK-3'ün Kural 1 istisnasındaki "dahi" ifadesi de bu okumayı destekliyor:
+> *"1 yılını doldurmamış personelin yıllık izin kaydı, aynı dönemde hastalık
+> raporu alınmış olsa **dahi** düşülmemeli."*
 
 ---
 
@@ -84,8 +84,11 @@ Aşağıdakiler teşvikten düşer:
 |---|---|---|---|
 | E1 | Rapor haftasının hafta sonu düşer | İK-1 | Teyitli |
 | E2 | Rapor birden çok haftaya yayılırsa **her** haftanın hafta sonu düşer | İK-1 | Teyitli |
+| E3 | Hafta sonu yalnızca **dönem ayının içine düşerse** sayılır | İK-1 | Teyitli |
 | E4 | Kesintiye giren **iznin** düştüğü haftanın hafta sonu da düşer | İK revizyonu | Teyitli |
-| E5 | Aynı hafta hem rapor hem izin içeriyorsa hafta sonu **bir kez** düşer | Mükerrer sayım kuralı | Teyitli |
+| E5 | Aynı hafta hem rapor hem izin içeriyorsa hafta sonu **bir kez** düşer | Mükerrer sayım | Teyitli |
+| E6 | Resmi tatilin düştüğü haftanın hafta sonu **sayılmaz** | VARSAYIM | **Teyit gerekiyor** |
+| E7 | **Yarım günlük** izin de haftanın hafta sonunu düşürür | VARSAYIM | **Teyit gerekiyor** |
 
 > ### E4 — İK revizyonu ile eklendi
 >
@@ -105,7 +108,23 @@ Aşağıdakiler teşvikten düşer:
 >
 > Gerçek Temmuz verisinde bu değişiklik 5 personelde 2'şer gün kayba yol açtı;
 > toplam destek 6383'ten 6373 güne indi.
-| E3 | Hafta sonu yalnızca **dönem ayının içine düşerse** sayılır | İK-1 | Teyitli |
+
+> ### ⚠ E6 ve E7 — örnekten yorumlandı, teyit edilmeli
+>
+> Revizyon metni bu iki noktayı açıkça söylemiyor; örnekteki toplamdan ve mevcut
+> kuralların mantığından çıkarıldı.
+>
+> **E6 — resmi tatil haftasının hafta sonu sayılmıyor.** Örnekteki toplam 7,5
+> gün. Resmi tatilin bulunduğu haftanın hafta sonu da düşseydi toplam 9,5 gün
+> olurdu. Bu nedenle resmi tatil, hafta sonu kaybı doğurmayan bir kalem olarak
+> uygulandı.
+>
+> **E7 — yarım günlük yıllık izin de haftanın hafta sonunu düşürüyor.** Saatlik
+> rapor hâlihazırda böyle işliyor (haftalık çalışma saati tamamlanmıyor); yarım
+> günlük yıllık izin için de aynı mantık kuruldu.
+>
+> **Sorulacak sorular:** Resmi tatil, bulunduğu haftanın hafta sonunu düşürmeli
+> mi? Kural yalnızca tam gün izinler için mi geçerli?
 
 > ### ⚠ E3'ün sonucu — teyit edilmesi iyi olur
 >
@@ -256,11 +275,11 @@ var, ama 2026 dışındakilerin dini bayram tarihleri hesaplanmıştır.
 
 ---
 
-## Özet — sorumlunuza sorulacak 8 madde
+## Özet — sorumlunuza sorulacak maddeler
 
 | # | Soru | Etkisi |
 |---|---|---|
-| 1 | Raporlu personelde yıllık izin düşüyor mu? (D3) | 5 personel, toplam 15 gün |
+| ~~1~~ | ~~Raporlu personelde yıllık izin düşüyor mu? (D3)~~ — *revizyon metniyle cevaplandı: düşüyor, haftasının hafta sonu da* | — |
 | ~~2~~ | ~~Ücretsiz izinde hafta sonları da düşmeli mi? (H2)~~ — *karara bağlandı: evet, takvim günü sayılır* | — |
 | ~~3~~ | ~~Arife günleri tam gün mü, yarım gün mü?~~ **Kapandı: yarım gün** | — |
 | 4 | Hesaplanan dini bayram tarihleri Diyanet'le uyuşuyor mu? (I) | 2027 ve sonrası |
@@ -268,6 +287,8 @@ var, ama 2026 dışındakilerin dini bayram tarihleri hesaplanmıştır.
 | 6 | Ay sonu haftasının hafta sonu kaybolması kabul edilebilir mi? (E3) | Ay sonunda raporu biten personel |
 | 7 | Yuvarlama eşiği yıllık izinde 4:30, raporda 4:00 — doğru mu? (G) | Şu an fark yaratmıyor |
 | 8 | Hak edilenden fazla yıllık izin kullanımı işaretlensin mi? (F3) | Yeni özellik olurdu |
+| 9 | Resmi tatilin düştüğü haftanın hafta sonu sayılmalı mı? (E6) | Raporlu + resmi tatilli personel |
+| 10 | Yarım günlük izin haftanın hafta sonunu düşürmeli mi? (E7) | Kısmi izin kullanan raporlu personel |
 
 Cevaplar geldikçe `hesaplama.py` içindeki ilgili sabit güncellenir; çoğu için
 `ayarlar.json` dosyasını düzenlemek bile yeterlidir.

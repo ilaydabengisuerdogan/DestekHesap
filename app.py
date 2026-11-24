@@ -218,13 +218,16 @@ if veri is not None:
         # Sonuçları göster
         st.markdown("### 📑 Hesaplama Sonuçları")
         sadece_kesintili = st.checkbox(
-            "Yalnızca kesintisi olan personeli göster", value=True,
-            help=f"Kesintisi olmayan personel tam {hesaplama.TESVIK_TABAN_GUN} gün destek alır.",
+            "Yalnızca teşviği eksik olan personeli göster", value=True,
+            help=f"Dönemin tamamını çalışan ve kesintisi olmayan personel tam "
+                 f"{hesaplama.TESVIK_TABAN_GUN} gün destek alır.",
         )
-        gosterilen = sonuc[sonuc['Toplam Kesinti'] > 0] if sadece_kesintili else sonuc
+        # Ölçüt hesaplama katmanında tek yerde duruyor; burada kopyalanmamalı,
+        # yoksa ekran ile '_kesintili' dosyası ayrışır.
+        gosterilen = hesaplama.kesintili_personel(sonuc) if sadece_kesintili else sonuc
 
         if gosterilen.empty:
-            st.info("Bu dönemde kesintisi olan personel bulunmuyor.")
+            st.info("Bu dönemde teşviği eksik olan personel bulunmuyor.")
         else:
             st.dataframe(
                 gosterilen.style.apply(
