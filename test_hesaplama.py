@@ -263,14 +263,29 @@ def test_raporsuzda_yillik_izin_hafta_sonu_dusurmez():
 
 def test_kismi_yillik_izin_haftasinin_hafta_sonu_duser():
     """
-    Yarım günlük yıllık izin de haftalık çalışma saatini eksiltir; saatlik
-    raporda olduğu gibi o haftanın hafta sonu düşer.
+    Sorumlu teyidi: haftalık çalışma süresi eksikse (yani RAPORLUYSA) yarım
+    günlük yıllık izin de, o haftanın hafta sonu da düşer.
+
+    Yarım gün, G bölümündeki yuvarlama kuralı gereği 1 tam güne tamamlanır.
     """
     sonuc = hesapla([
         rapor(1, '2026-07-09', '2026-07-09', 1),
         satir(1, 'Yıllık İzin', '2026-07-21', '2026-07-21', 0.25),
     ])
-    assert sonuc['Hafta Sonu Kesintisi'] == 4
+    assert sonuc['Yıllık İzin Kesintisi'] == 1       # 0,5 -> 1 tam gün
+    assert sonuc['Hafta Sonu Kesintisi'] == 4        # rapor + izin haftası
+
+
+def test_raporsuzda_kismi_yillik_izin_hicbir_sey_dusurmez():
+    """
+    Sorumlu teyidi: raporu yoksa ne yıllık izin ne de hafta sonu düşer.
+    Yarım günlük izin için de aynısı geçerlidir.
+    """
+    sonuc = hesapla([satir(1, 'Yıllık İzin', '2026-07-21', '2026-07-21', 0.25)])
+    assert sonuc['Rapor Durumu'] == 'Raporsuz'
+    assert sonuc['Yıllık İzin Kesintisi'] == 0
+    assert sonuc['Hafta Sonu Kesintisi'] == 0
+    assert sonuc['Teşvik Gün Sayısı'] == 30
 
 
 def test_dusmeyen_izin_turleri_hafta_sonu_da_dusurmez():

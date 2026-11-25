@@ -87,8 +87,8 @@ Aşağıdakiler teşvikten düşer:
 | E3 | Hafta sonu yalnızca **dönem ayının içine düşerse** sayılır | İK-1 | Teyitli |
 | E4 | Kesintiye giren **iznin** düştüğü haftanın hafta sonu da düşer | İK revizyonu | Teyitli |
 | E5 | Aynı hafta hem rapor hem izin içeriyorsa hafta sonu **bir kez** düşer | Mükerrer sayım | Teyitli |
-| E6 | Resmi tatilin düştüğü haftanın hafta sonu **sayılmaz** | VARSAYIM | **Teyit gerekiyor** |
-| E7 | **Yarım günlük** izin de haftanın hafta sonunu düşürür | VARSAYIM | **Teyit gerekiyor** |
+| E6 | Resmi tatilin düştüğü haftanın hafta sonu **sayılmaz** | Sorumlu teyidi | Teyitli |
+| E7 | **Yarım günlük** izin de haftanın hafta sonunu düşürür (yalnızca raporluda) | Sorumlu teyidi | Teyitli |
 
 > ### E4 — İK revizyonu ile eklendi
 >
@@ -109,10 +109,10 @@ Aşağıdakiler teşvikten düşer:
 > Gerçek Temmuz verisinde bu değişiklik 5 personelde 2'şer gün kayba yol açtı;
 > toplam destek 6383'ten 6373 güne indi.
 
-> ### ⚠ E6 ve E7 — örnekten yorumlandı, teyit edilmeli
+> ### E6 ve E7 — teyit edildi
 >
-> Revizyon metni bu iki noktayı açıkça söylemiyor; örnekteki toplamdan ve mevcut
-> kuralların mantığından çıkarıldı.
+> Bu iki nokta revizyon metninde açıkça yazmıyordu; örnekteki toplamdan ve mevcut
+> kuralların mantığından çıkarılmış, sorumluya sorulmuştu. **İkisi de onaylandı.**
 >
 > **E6 — resmi tatil haftasının hafta sonu sayılmıyor.** Örnekteki toplam 7,5
 > gün. Resmi tatilin bulunduğu haftanın hafta sonu da düşseydi toplam 9,5 gün
@@ -123,8 +123,13 @@ Aşağıdakiler teşvikten düşer:
 > rapor hâlihazırda böyle işliyor (haftalık çalışma saati tamamlanmıyor); yarım
 > günlük yıllık izin için de aynı mantık kuruldu.
 >
-> **Sorulacak sorular:** Resmi tatil, bulunduğu haftanın hafta sonunu düşürmeli
-> mi? Kural yalnızca tam gün izinler için mi geçerli?
+> **Gelen cevap:** Resmi tatil için mevcut uygulama doğru. Yarım günlük izinde ise
+> belirleyici olan raporun varlığı: *haftalık çalışma süresi eksikse (yani raporluysa)*
+> yarım günlük yıllık izin de, o haftanın hafta sonu da düşer; *raporu yoksa* ne
+> yıllık izin ne de hafta sonu düşer.
+>
+> Not: Tek bir yarım günlük izin, G bölümündeki yuvarlama kuralı gereği **1 tam gün**
+> olarak düşer (0,5 → 1); iki yarım gün yine 1 gündür.
 
 > ### ⚠ E3'ün sonucu — teyit edilmesi iyi olur
 >
@@ -287,8 +292,8 @@ var, ama 2026 dışındakilerin dini bayram tarihleri hesaplanmıştır.
 | 6 | Ay sonu haftasının hafta sonu kaybolması kabul edilebilir mi? (E3) | Ay sonunda raporu biten personel |
 | 7 | Yuvarlama eşiği yıllık izinde 4:30, raporda 4:00 — doğru mu? (G) | Şu an fark yaratmıyor |
 | 8 | Hak edilenden fazla yıllık izin kullanımı işaretlensin mi? (F3) | Yeni özellik olurdu |
-| 9 | Resmi tatilin düştüğü haftanın hafta sonu sayılmalı mı? (E6) | Raporlu + resmi tatilli personel |
-| 10 | Yarım günlük izin haftanın hafta sonunu düşürmeli mi? (E7) | Kısmi izin kullanan raporlu personel |
+| ~~9~~ | ~~Resmi tatilin düştüğü haftanın hafta sonu sayılmalı mı? (E6)~~ — *teyit edildi: sayılmaz* | — |
+| ~~10~~ | ~~Yarım günlük izin haftanın hafta sonunu düşürmeli mi? (E7)~~ — *teyit edildi: raporluysa düşer* | — |
 
 Cevaplar geldikçe `hesaplama.py` içindeki ilgili sabit güncellenir; çoğu için
 `ayarlar.json` dosyasını düzenlemek bile yeterlidir.
