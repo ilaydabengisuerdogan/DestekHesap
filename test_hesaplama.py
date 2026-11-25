@@ -327,6 +327,83 @@ def test_tam_ay_rapor_destek_sifira_dusmez_negatife():
     assert sonuc['Teşvik Saat Sayısı'] == 0
 
 
+# ----------------------------------------------- Ekim 2026 referans dogrulamasi
+#
+# Isverenin resmi puantaj ciktisindan ("Sigorta Primi Isveren Hissesi (Gun)")
+# dogrulanmis degerler. Kural: tesvik = taban - (rapor gunu + rapor haftalarinin
+# hafta sonu + yillik izin + yillik izin haftalarinin hafta sonu + resmi tatil),
+# yuvarlama yapilmadan.
+
+EKIM = (2026, 10)
+
+
+def _ekim(kayitlar, ise='2018-01-01', cikis=None):
+    satirlar = []
+    for tur, neden, bas, bit, gun in kayitlar:
+        s = satir(1, tur, bas, bit, gun, neden) if tur else _personel_satiri(1)
+        s[hesaplama.ISE_BASLAMA_KOLONU] = pd.Timestamp(ise)
+        if cikis:
+            s[hesaplama.CIKIS_KOLONU] = pd.Timestamp(cikis)
+        satirlar.append(s)
+    return hesaplama.hesapla(pd.DataFrame(satirlar), EKIM).iloc[0]
+
+
+RAPOR = ('Şirket Dışında Olma Nedeni', 'Hastalık Raporu')
+YILLIK = ('Yıllık İzin', 'Ücretli Yıllık İzin')
+
+
+@pytest.mark.parametrize('ad, kayitlar, beklenen', [
+    # Rapor 19-20 (hafta sonu 24-25) + yillik 12 (hafta sonu 17-18)
+    # + yillik 30 (hafta sonu 31 Ekim-1 Kasim, aya tasmadigi icin sayilmaz)
+    ('Personel A', [RAPOR + ('2026-10-19', '2026-10-20', 2),
+                    YILLIK + ('2026-10-12', '2026-10-12', 1),
+                    YILLIK + ('2026-10-30', '2026-10-30', 1)], 20.5),
+    # Yillik izin 30 Ekim: haftasinin hafta sonu aya tasiyor, dusmez
+    ('Personel C', [RAPOR + ('2026-10-14', '2026-10-15', 2),
+                           YILLIK + ('2026-10-30', '2026-10-30', 1)], 23.5),
+    ('Personel D', [RAPOR + ('2026-10-05', '2026-10-06', 2)], 24.5),
+    ('Personel E', [RAPOR + ('2026-10-02', '2026-10-02', 1)], 25.5),
+    # Rapor 3-5 Ekim: 3-4 hafta sonu, yalnizca 5 Ekim is gunu.
+    # Hafta sonunu is gunu belirledigi icin tek hafta sonu duser.
+    ('Personel F', [RAPOR + ('2026-10-03', '2026-10-05', 3)], 25.5),
+    ('Personel B', [RAPOR + ('2026-10-20', '2026-10-21', 2),
+                       YILLIK + ('2026-10-01', '2026-10-01', 1)], 21.5),
+])
+def test_ekim_referans_degerleri(ad, kayitlar, beklenen):
+    assert _ekim(kayitlar)['Teşvik Gün Sayısı'] == beklenen
+
+
+@pytest.mark.parametrize('ad, ise, cikis, beklenen', [
+    ('Personel G', '2026-10-06', None, 26.0),   # ay icinde ise giris
+    ('Personel H', '2018-01-01', '2026-10-17', 17.0),
+])
+def test_ekim_raporsuz_kismi_calisma(ad, ise, cikis, beklenen):
+    """Raporu olmayan personelde resmi tatil de hafta sonu da dusmez."""
+    s = _ekim([(None, None, None, None, None)], ise=ise, cikis=cikis)
+    assert s['Teşvik Gün Sayısı'] == beklenen
+    assert s['Toplam Kesinti'] == 0
+
+
+def test_aya_tasan_hafta_sonu_yarim_sayilmaz():
+    """
+    26 Ekim - 1 Kasim haftasinin hafta sonu 31 Ekim + 1 Kasim'dir. 1 Kasim
+    donem disinda kaldigi icin bu hafta sonu HIC dusmez; 31 Ekim tek basina
+    sayilmaz.
+    """
+    s = _ekim([RAPOR + ('2026-10-30', '2026-10-30', 1)])
+    assert s['Hafta Sonu Kesintisi'] == 0
+
+
+def test_hafta_sonunu_yalnizca_is_gunleri_isaretler():
+    """
+    Cumartesi-Pazar'a uzanan rapor, o hafta sonunun ait oldugu haftayi
+    isaretlemez; yalnizca is gunu iceren haftanin hafta sonu duser.
+    """
+    s = _ekim([RAPOR + ('2026-10-03', '2026-10-05', 3)])
+    assert s['Rapor Gün'] == 1                 # yalnizca 5 Ekim is gunu
+    assert s['Hafta Sonu Kesintisi'] == 2      # yalnizca 10-11 Ekim
+
+
 # ------------------------------------------- ücretsiz izin ve kıdem şartı
 
 def test_ucretsiz_izin_raporsuz_personelde_de_duser():
@@ -1281,25 +1358,14 @@ def test_kullanici_ornegi():
     # 0,5 gün eksik çalışma + 2 gün hafta sonu (11-12) + 2 gün yıllık izin + 1 gün 15 Temmuz
     assert sonuc['Kısmi Rapor Kesintisi'] == 0.5      # kırılımda yarım gün duruyor
     assert sonuc['Hafta Sonu Kesintisi'] == 4         # rapor + yıllık izin haftası
-    assert sonuc['Toplam Kesinti'] == 8               # 7,5 yukarı tamamlandı
-    assert sonuc['Teşvik Gün Sayısı'] == 22
+    assert sonuc['Toplam Kesinti'] == 7.5             # yuvarlama yok
+    assert sonuc['Teşvik Gün Sayısı'] == 22.5
 
 
-@pytest.mark.parametrize('ham, beklenen', [
-    (0.0, 0.0),
-    (0.5, 1.0),
-    (5.5, 6.0),
-    (6.0, 6.0),      # zaten tam gunse degismez
-    (11.5, 12.0),
-])
-def test_toplam_kesinti_tam_gune_yukari_tamamlanir(ham, beklenen):
-    assert hesaplama.kesintiyi_tam_gune_tamamla(ham) == beklenen
-
-
-def test_arife_yarim_gunu_toplamda_tam_gune_tamamlanir():
+def test_arife_yarim_gunu_toplamda_bucuklu_kalir():
     """
-    Arife yarim gun sayildigi icin kesinti bucuklu cikabilir; toplam yukari
-    tamamlanir ve tesvik tam sayi kalir.
+    Arife yarim gun sayilir ve toplam yuvarlanmaz; referans cikti da bucuklu
+    sonuclar (20,5 / 23,5 / 25,5) veriyor.
     """
     # Yardimci sabit Temmuz takvimini kullandigi icin dogrudan cagriliyor:
     # takvim verilmezse donemin gercek tatilleri (arife dahil) uretilir.
@@ -1307,8 +1373,8 @@ def test_arife_yarim_gunu_toplamda_tam_gune_tamamlanir():
         pd.DataFrame([rapor(1, '2026-05-25', '2026-05-27', 3)]), (2026, 5))
     sonuc = tablo.iloc[0]
     assert sonuc['Rapor Gün'] == 1.5          # 26 Mayis arifesi yarim
-    assert float(sonuc['Toplam Kesinti']).is_integer()
-    assert float(sonuc['Teşvik Gün Sayısı']).is_integer()
+    assert sonuc['Toplam Kesinti'] == 8.5
+    assert sonuc['Teşvik Gün Sayısı'] == 21.5
 
 
 def test_resmi_tatil_hafta_sonuna_denk_gelirse_sayilmaz():

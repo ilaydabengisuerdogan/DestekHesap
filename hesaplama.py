@@ -698,24 +698,6 @@ def yillik_izin_hakki(kidem):
     return 0
 
 
-def kesintiyi_tam_gune_tamamla(toplam):
-    """
-    Toplam kesintiyi tam güne yukarı tamamlar (İK kararı).
-
-    5,5 gün kesinti 6 gün sayılır. Teşvik tabanı her zaman tam sayı olduğu
-    için bu, teşviği aşağı yuvarlamakla birebir aynı sonucu verir:
-    30 - 5,5 = 24,5 yerine 30 - 6 = 24.
-
-    Yarım günler arife (0,5) ve kısmi yıllık izinden geliyor; kırılım
-    kolonlarında ayrıntı olduğu gibi durur, yuvarlama yalnızca toplama
-    uygulanır.
-    """
-    toplam = round(toplam, 6)
-    if toplam <= 0:
-        return 0.0
-    return float(math.ceil(toplam))
-
-
 def yillik_izin_kismi_kesintisi(toplam_gun):
     """
     Yıllık izindeki yarım günlerin toplamını tam güne yuvarlar (Kural 3).
@@ -1312,7 +1294,9 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None,
     for satir, baslangic, bitis in rapor_satirlari:
         tam_gun_mu = satir['quantityInDays'] >= 1
         for gun in gun_araligi(baslangic, bitis):
-            if tam_gun_mu and is_gunu(gun, tatiller):
+            if not is_gunu(gun, tatiller):
+                continue        # hafta sonu/resmi tatil kendi haftasini isaretlemez
+            if tam_gun_mu:
                 rapor_gunleri.add(gun)
             rapor_haftalari.add(hafta_basi(gun))
         if not tam_gun_mu:
@@ -1345,12 +1329,13 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None,
             # Kısmi izin de haftalık çalışma saatini eksiltir; saatlik raporda
             # olduğu gibi o haftanın hafta sonu düşer.
             for gun in gun_araligi(baslangic, bitis):
-                izin_haftalari.add(hafta_basi(gun))
+                if is_gunu(gun, tatiller):
+                    izin_haftalari.add(hafta_basi(gun))
             continue
         for gun in gun_araligi(baslangic, bitis):
             if is_gunu(gun, tatiller):
                 izin_gunleri.add(gun)
-            izin_haftalari.add(hafta_basi(gun))
+                izin_haftalari.add(hafta_basi(gun))
 
     if kidemsiz_atlanan:
         uyarilar.append(
@@ -1359,15 +1344,18 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None,
         )
 
     # Haftalık çalışma saatinin tamamlanamadığı haftaların hafta sonu düşer:
-    # hem rapor haftaları hem de kesintiye giren izin haftaları. Yalnızca dönem
-    # ayına düşen günler sayılır; ay sonu haftasının hafta sonu bir sonraki aya
-    # taşıyorsa bu dönemden düşmez (örn. 27-31 Temmuz haftasının 1-2 Ağustos'u).
+    # hem rapor haftaları hem de kesintiye giren izin haftaları.
+    #
+    # Hafta sonu döneme TAM sığmalıdır. Cumartesi ile Pazar'dan biri dönemin
+    # dışına taşıyorsa o hafta sonu hiç düşmez; yarısı sayılmaz. Örnek:
+    # 26 Ekim - 1 Kasım haftasının hafta sonu 31 Ekim + 1 Kasım'dır; 1 Kasım
+    # dönem dışında kaldığı için Ekim'den hiç düşmez.
     hafta_sonlari = set()
     for pazartesi in rapor_haftalari | izin_haftalari:
-        for kayma in (5, 6):
-            gun = pazartesi + dt.timedelta(days=kayma)
-            if donem_ilk <= gun <= donem_son:
-                hafta_sonlari.add(gun)
+        cumartesi = pazartesi + dt.timedelta(days=5)
+        pazar = pazartesi + dt.timedelta(days=6)
+        if donem_ilk <= cumartesi and pazar <= donem_son:
+            hafta_sonlari.update((cumartesi, pazar))
 
     # Aynı gün birden çok kategoride işaretlenmiş olabilir; mükerrer saymamak
     # için rapor günleri kazanır. Hafta sonları Cmt-Paz olduğu için ayrıktır.
@@ -1397,7 +1385,9 @@ def hesapla_personel(satirlar, donem, tatiller, ek_kolonlar=(), kimlik_ad=None,
     yillik_kesinti = (gun_toplami(izin_gunleri, tatiller, yarim_tatiller)
                       + yillik_izin_kismi_kesintisi(yarim_gun_toplami))
 
-    toplam_kesinti = kesintiyi_tam_gune_tamamla(
+    # Yuvarlama yok: referans çıktıda sonuçlar 20,5 / 23,5 / 25,5 gibi buçuklu
+    # kalıyor. Buçuk, arife (yarım gün) ve kısmi izinlerden geliyor.
+    toplam_kesinti = (
         rapor_kesintisi + len(hafta_sonlari) + yillik_kesinti
         + resmi_tatil_kesintisi + kismi_kesinti
     )

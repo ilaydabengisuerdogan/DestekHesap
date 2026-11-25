@@ -347,9 +347,13 @@ Veri dosyalarını depoya eklemeyin.
 ## Bakım notları
 
 - **Arife günleri yarım gün** sayılır: Ramazan ve Kurban arifeleri ile 28 Ekim.
-- **Toplam kesinti tam güne yukarı tamamlanır** (7,5 → 8). Yarım günler arife ve
-  kısmi izinlerden gelir; kırılım kolonlarında ayrıntı korunur, yuvarlama yalnızca
-  toplama uygulanır. Teşvik tabanı tam sayı olduğu için teşvik günü de tam çıkar.
+- **Toplam kesinti yuvarlanmaz.** Arife (yarım gün) ve kısmi izinler yüzünden
+  teşvik günü buçuklu çıkabilir (20,5 · 23,5 · 25,5). İşverenin resmi puantaj
+  çıktısı da buçuklu değer verdiği için yuvarlama kaldırıldı.
+- **Hafta sonu döneme tam sığmalıdır.** Cumartesi ile Pazar'dan biri ay dışına
+  taşıyorsa o hafta sonu hiç düşmez; yarısı sayılmaz.
+- **Haftayı yalnızca iş günleri işaretler.** Hafta sonuna uzanan bir rapor, o
+  hafta sonunun ait olduğu haftayı kesintiye sokmaz.
   O güne denk gelen rapor/izin 0,5 gün, çalışılmışsa resmi tatil kesintisi 0,5 gündür.
 
   > İK'nın kendi sistemi 28 Ekim'i **tam gün** sayıyor (Temmuz dosyasındaki

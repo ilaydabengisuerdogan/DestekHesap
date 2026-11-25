@@ -84,7 +84,8 @@ Aşağıdakiler teşvikten düşer:
 |---|---|---|---|
 | E1 | Rapor haftasının hafta sonu düşer | İK-1 | Teyitli |
 | E2 | Rapor birden çok haftaya yayılırsa **her** haftanın hafta sonu düşer | İK-1 | Teyitli |
-| E3 | Hafta sonu yalnızca **dönem ayının içine düşerse** sayılır | İK-1 | Teyitli |
+| E3 | Hafta sonu döneme **tam sığmalıdır**; Cmt veya Paz ay dışına taşarsa hiç sayılmaz | Puantaj doğrulaması | Teyitli |
+| E8 | Haftayı yalnızca **iş günleri** işaretler; hafta sonuna uzanan rapor o hafta sonunu kesintiye sokmaz | Puantaj doğrulaması | Teyitli |
 | E4 | Kesintiye giren **iznin** düştüğü haftanın hafta sonu da düşer | İK revizyonu | Teyitli |
 | E5 | Aynı hafta hem rapor hem izin içeriyorsa hafta sonu **bir kez** düşer | Mükerrer sayım | Teyitli |
 | E6 | Resmi tatilin düştüğü haftanın hafta sonu **sayılmaz** | Sorumlu teyidi | Teyitli |
@@ -100,7 +101,10 @@ Aşağıdakiler teşvikten düşer:
 > yıllık izin, yine farklı bir haftada 1 gün resmi tatil.
 >
 > 0,5 (eksik saat) + 2 (rapor haftasının hafta sonu) + 1 (resmi tatil)
-> + 2 (yıllık izin) + 2 (yıllık izin haftasının hafta sonu) = **7,5 → 8 gün**
+> + 2 (yıllık izin) + 2 (yıllık izin haftasının hafta sonu) = **7,5 gün**
+>
+> (Revizyon metni bu toplamı 8'e yuvarlıyordu; işverenin resmi puantaj çıktısı
+> buçuklu değer verdiği için yuvarlama kaldırıldı — bkz. G3.)
 >
 > Resmi tatilin düştüğü haftanın hafta sonu sayılmaz; örnekteki toplam bunu
 > doğruluyor. Kural raporlu personele özgüdür: raporsuzda yıllık izin zaten
@@ -171,6 +175,20 @@ Aşağıdakiler teşvikten düşer:
 | İki ayrı günde 0,5 + 0,5 | **1 tam gün** (iki ayrı gün değil) | Teyitli |
 | Bir günde **4 saat 30 dk üzeri** izin | O gün tam gün | Teyitli |
 | Toplam yarım günler | Toplanıp yukarı yuvarlanır (3,5 → 4) | Teyitli |
+
+### G3. Toplam kesintide
+
+| Durum | Sonuç | Durum |
+|---|---|---|
+| Toplam kesinti buçuklu çıkarsa | **Yuvarlanmaz** (9,5 → teşvik 20,5) | Teyitli |
+
+> **G3 — değişti.** Revizyon metni toplamın yukarı yuvarlandığını söylüyordu
+> (7,5 → 8). Ekim 2026 resmi puantaj çıktısı ise buçuklu değerler veriyor
+> (20,5 · 23,5 · 24,5 · 25,5) ve yuvarlama olmadan sekiz personelin tamamı
+> birebir tutuyor. Bu nedenle yuvarlama kaldırıldı.
+>
+> G1'deki yıllık izin yarım gün havuzu (0,5 → 1) **değişmedi**; onu doğrulayan
+> bir örnek yok.
 
 ### G2. Kısmi raporda / eksik çalışmada (İK-1)
 

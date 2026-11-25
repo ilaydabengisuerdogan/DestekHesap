@@ -167,15 +167,30 @@ aşıyorsa tam gün olarak düşülür.
 | Resmi tatil | 1,0 |
 | Yıllık izin | 2,0 |
 | **Yıllık izin haftasının hafta sonu** | **2,0** |
-| Kırılım toplamı | 7,5 |
-| **Toplam kesinti** (tam güne tamamlanır) | **8** |
-| Destek günü | **22** |
+| **Toplam kesinti** | **7,5** |
+| Destek günü | **22,5** |
 
 Hafta sonu kaybı yalnızca rapor haftasında değil, kesintiye giren iznin düştüğü
 haftada da doğar; bu örnekte iki ayrı haftadan toplam 4 gün düşer.
 
-Toplam kesinti tam güne yukarı tamamlanır (7,5 → 8), böylece teşvik günü her
-zaman tam sayı çıkar. Kırılım kolonlarında yarım gün ayrıntısı korunur.
+Toplam kesinti **yuvarlanmaz**; arife ve kısmi izinler yüzünden sonuç buçuklu
+kalabilir. İşverenin resmi puantaj çıktısı da buçuklu değer veriyor.
+
+### Ekim 2026 — resmi puantajla doğrulanmış değerler
+
+| Personel | Rapor | Hafta sonu | Yıllık izin | Resmi tatil | Kesinti | Teşvik |
+|---|---:|---:|---:|---:|---:|---:|
+| Personel A | 2 | 4 | 2 | 1,5 | 9,5 | **20,5** |
+| Personel B | 2 | 4 | 1 | 1,5 | 8,5 | **21,5** |
+| Personel C | 2 | 2 | 1 | 1,5 | 6,5 | **23,5** |
+| Personel D | 2 | 2 | 0 | 1,5 | 5,5 | **24,5** |
+| Personel E | 1 | 2 | 0 | 1,5 | 4,5 | **25,5** |
+| Personel F | 1 | 2 | 0 | 1,5 | 4,5 | **25,5** |
+| Personel G (06.10 girişli) | 0 | 0 | 0 | 0 | 0 | **26** |
+| Personel H (17.10 çıkışlı) | 0 | 0 | 0 | 0 | 0 | **17** |
+
+Sekizinin tamamı işverenin "Sigorta Primi İşveren Hissesi (Gün)" kolonuyla
+birebir tutuyor.
 
 ---
 
